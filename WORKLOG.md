@@ -4,9 +4,10 @@
 - **Architecture**: Two-EC2 deployment (Minecraft + Agents separated)
 - **Minecraft Server**: AWS EC2 #1 (18.217.111.253:25565)
 - **Agent Server**: AWS EC2 #2 (18.222.122.59:8080)
-- **Active Agents**: Builder Bob, Explorer Emma, Builder Max (3 agents)
+- **Active Agents**: 6 total (2 builders, 1 explorer, 3 warriors)
 - **Process Manager**: pm2 with tsx (auto-restart on boot)
-- **Agent Philosophy**: 95% building, 5% communication (aggressive build mode)
+- **Builder Philosophy**: Blueprint → Complete Build → Verify → Move On
+- **Warrior Philosophy**: 99% combat, silent mob extermination
 
 ---
 
@@ -211,6 +212,48 @@
   - Bypasses TypeScript compilation issues
   - Saved config for auto-restart on boot
 
+### 2026-02-09 (Warriors & Blueprint Workflow)
+
+- **Added 3 Warrior Agents (6 Total Agents Now)**
+  - Warrior Wolf (`warrior_1`) - Roaming patrol hunter, silent killer
+  - Warrior Shadow (`warrior_2`) - Underground cave exterminator
+  - Warrior Stone (`warrior_3`) - Stationary guard at town center (0,100,0)
+  - All warriors use 99% combat / 1% communication ratio
+  - Auto-equip netherite gear and strength effects
+  - Constantly run `/kill @e[type=zombie,distance=..50]` etc.
+
+- **New Warrior Role Type**
+  - Added `warrior` to AgentRole type
+  - Created 3 warrior personalities: `warrior`, `warriorNight`, `warriorGuard`
+  - Warriors protect builders from hostile mobs
+
+- **Blueprint-First Build Workflow**
+  - Changed builder personalities from "aggressive random building" to structured workflow
+  - New process: Blueprint → Complete Build → Verify → Move On
+  - Builders must finish 100% of structure before starting next
+  - Small structures (300-500 blocks) to ensure completion
+  - Every structure must have: floor, walls, roof, door, interior
+  - Quality over quantity philosophy
+
+- **Current Agent Roster (6 Agents)**
+  | Agent | Role | Port | Behavior |
+  |-------|------|------|----------|
+  | Builder Bob | builder | 3001 | Blueprint-first, methodical |
+  | Explorer Emma | explorer | 3002 | Fast scout, 90% explore |
+  | Builder Max | builder | 3003 | Fast but complete builds |
+  | Warrior Wolf | warrior | 3004 | Roaming patrol |
+  | Warrior Shadow | warrior | 3005 | Underground clearing |
+  | Warrior Stone | warrior | 3006 | Stationary guard |
+
+- **Player Access**
+  - Whitelisted `godmode26` for direct Minecraft client access
+  - Granted operator permissions
+  - Server: 18.217.111.253:25565 (version 1.21.4)
+
+- **pm2 Auto-Start Configured**
+  - Ran `pm2 startup` with systemd
+  - All 6 agents will auto-restart on EC2 reboot
+
 ---
 
 ## Architecture Reference
@@ -232,13 +275,12 @@
 │             │                               │    └── AgentMessenger     │
 │             │ Private IP                    │                           │
 │             │ 172.31.30.41                  ├── Builder Bob :3001       │
-│             │                               │    └── Supervisor (Claude)│
-│             │                               │                           │
-│             └─────────────────────────────► ├── Explorer Emma :3002     │
-│               TCP/25565                     │    └── Supervisor (Claude)│
-│                                             │                           │
-│                                             ├── Builder Max :3003       │
-│                                             │    └── Supervisor (Claude)│
+│             │                               ├── Explorer Emma :3002     │
+│             └─────────────────────────────► ├── Builder Max :3003       │
+│               TCP/25565                     ├── Warrior Wolf :3004      │
+│                                             ├── Warrior Shadow :3005    │
+│                                             ├── Warrior Stone :3006     │
+│                                             │   (All with Claude AI)    │
 │                                             │                           │
 │                                             └── REST API :8080          │
 │                                                  ├── /v1/agents/*       │

@@ -73,6 +73,28 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     viewerPort: 3003,
     dataDir: '.data/agents/builder_2',
   },
+  // Warriors - protect the builders from hostile mobs
+  {
+    agentId: 'warrior_1',
+    username: 'WarriorWolf',
+    personality: PERSONALITIES.warrior!,
+    viewerPort: 3004,
+    dataDir: '.data/agents/warrior_1',
+  },
+  {
+    agentId: 'warrior_2',
+    username: 'WarriorShadow',
+    personality: PERSONALITIES.warriorNight!,
+    viewerPort: 3005,
+    dataDir: '.data/agents/warrior_2',
+  },
+  {
+    agentId: 'warrior_3',
+    username: 'WarriorStone',
+    personality: PERSONALITIES.warriorGuard!,
+    viewerPort: 3006,
+    dataDir: '.data/agents/warrior_3',
+  },
 ];
 
 async function main() {
