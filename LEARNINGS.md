@@ -250,6 +250,94 @@ WarriorStone issued server command: /tp @s BuilderBot  ← Rotating!
 
 ---
 
+## Learning #4: Prompt Structure Matters - Verbose Instructions Get Ignored
+
+**Date:** 2026-02-09
+
+### Symptom
+- Builders have "blueprint first" instructions in personality
+- Instructions clearly say: "NEVER start new structure until current done"
+- Builders ignore this, scatter blocks at 5+ locations simultaneously
+- Server logs show random block placement, no blueprint workflow
+
+### Root Cause
+
+**Verbose paragraph-style prompts get skimmed or ignored by LLMs.**
+
+Original prompt (ignored):
+```
+STRICT BUILD WORKFLOW:
+STEP 1 - QUICK BLUEPRINT:
+- Use createBlueprint for simple structure (small house, tower, wall section)
+- Keep structures SMALL (under 300 blocks) for fast completion
+- Must include: floor, walls, roof, door
+
+STEP 2 - BUILD ENTIRE STRUCTURE:
+- Execute ALL blueprint commands in one batch
+...
+```
+
+The problem:
+1. **Wall of text** - LLM attention diffuses across paragraphs
+2. **No visual hierarchy** - Steps blend together
+3. **No accountability** - No required outputs to prove compliance
+4. **Suggestions vs commands** - "Use createBlueprint" reads as optional
+
+### Fix Applied
+
+Restructured prompts with:
+
+**1. Visual separators for scannability**
+```
+═══════════════════════════════════════════════════════════════
+MANDATORY WORKFLOW - FOLLOW THESE STEPS IN EXACT ORDER
+═══════════════════════════════════════════════════════════════
+
+PHASE 1: DECIDE (before ANY building)
+────────────────────────────────────────
+```
+
+**2. Explicit phase gates with required outputs**
+```
+1. Send a message: "I will build: [STRUCTURE NAME] at [X,Y,Z]"
+```
+(Agent must produce observable output before proceeding)
+
+**3. Hard rules with visual ✗/✓ markers**
+```
+✗ NEVER place blocks without a blueprint first
+✗ NEVER start a new structure until current one is COMPLETED
+✓ ONE structure at a time
+✓ ANNOUNCE before starting
+```
+
+**4. Smaller chunks, imperative voice**
+- Each phase is 3-4 lines max
+- Commands, not suggestions: "Send a message" not "You should send"
+
+### Why This Works
+
+| Verbose Prompt | Structured Prompt |
+|----------------|-------------------|
+| Paragraphs blend together | Visual breaks create sections |
+| Easy to skim past rules | ✗/✓ markers catch attention |
+| No proof of compliance | Required announcements create accountability |
+| "Should/could" language | Imperative "DO THIS" language |
+| Steps buried in text | Numbered phases with clear gates |
+
+### Key Takeaway
+
+> **LLMs follow structure, not length.** A 50-line prompt with visual hierarchy
+> beats a 20-line paragraph. Make compliance the path of least resistance.
+>
+> Design prompts like forms, not essays:
+> - Clear sections with visual separators
+> - Required outputs at each phase
+> - Scannable rules with symbols (✗/✓)
+> - Imperative voice ("Do X" not "You should X")
+
+---
+
 ## Future Learnings
 
 *Add new learnings as they're discovered...*
@@ -265,6 +353,7 @@ WarriorStone issued server command: /tp @s BuilderBot  ← Rotating!
 | Static Guards | Protectors guard wrong locations | Death logs | Dynamic targeting |
 | Spam Kicks | Commands filtered as spam | Server logs | Rate limiting |
 | Echo Chamber | Agents reinforce false beliefs | Cross-check with world state | Ground truth validation |
+| Verbose Prompts | Instructions get skimmed/ignored | Agents don't follow workflow | Structured prompts with visual hierarchy |
 
 ---
 
