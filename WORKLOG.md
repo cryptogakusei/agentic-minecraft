@@ -406,6 +406,75 @@
   - All warriors actively killing mobs (zombies, skeletons, phantoms, etc.)
   - Kill radius: 40-75 blocks depending on warrior
 
+### 2026-02-09 (Structured Workflow & Behavioral Experiments)
+
+- **Updated Builder Personalities with Structured 4-Phase Workflow**
+  - Changed from verbose paragraph instructions to structured format
+  - 4 mandatory phases: DECIDE → BLUEPRINT → BUILD → VERIFY
+  - Visual separators (═══, ────) for scannability
+  - Required announcements: "I will build: X at Y,Z", "Blueprint: X, N blocks", "DONE: X"
+  - Hard rules with ✗/✓ markers
+
+- **LEARNINGS.md Methodology Improved**
+  - Changed from "Fix Applied" to "Proposed Fix (Verification Pending)"
+  - Document issue → propose fix → implement → verify → update learning
+  - Added contribution guidelines at top of file
+
+- **Experiment: Testing Behavioral Pattern Sources**
+
+  | Fix Attempted | Result |
+  |---------------|--------|
+  | Structured prompts | ⚠️ Partial - some compliance |
+  | Supervisor restart | ⚠️ Partial - old patterns return |
+  | Memory file clearing | ❌ No effect - patterns not stored there |
+  | Disable messaging | 🔬 Testing in progress |
+
+- **Discovery: Behavioral Contagion**
+  - Cleared blueprints.json, scripts.json, world-index.json
+  - Backed up to `.data/backups/2026-02-09-pre-reset/`
+  - Patterns STILL persisted after memory clear
+  - Hypothesis: Patterns spread through inter-agent communication
+  - Builder Bob's "portfolio tracking" style infected Builder Max
+
+- **Current Experiment: Isolated Builder Behavior**
+  - Disabled sendMessage, broadcastMessage, getMessages for builders
+  - Kept region tools (claimRegion, etc.) for coordination
+  - Testing if isolated agents follow structured workflow
+  - Warriors still have full messaging (they need to coordinate protection)
+
+- **LEARNINGS.md Now Contains 6 Entries**
+  1. Phantom Builds (verified ✅)
+  2. Role Drift (verified ✅)
+  3. Bodyguard Problem (verified ✅)
+  4. Prompt Structure (partial ⚠️)
+  5. Cached Context (partial ⚠️)
+  6. Behavioral Contagion (investigating 🔬)
+
+### 2026-02-09 (Messaging Disable Experiment - Inconclusive)
+
+- **Experiment: Isolated Builder Behavior**
+  - **Goal**: Test if disabling inter-agent messaging for builders changes their workflow compliance
+  - **Code Changes Applied**:
+    - `supervisor.ts`: Removed messaging tools (sendMessage, broadcastMessage, getMessages) for builders
+    - `prompt-pack.ts`: Removed "Other Agents" context and messaging hints for builders
+    - Builders still have region tools (claimRegion, getClaimedRegions, etc.)
+
+- **Multiple Restart Attempts**:
+  1. `pm2 restart minecraft-agents` - messaging still worked (supervisor context cached)
+  2. API call to restart supervisors - messaging still worked
+  3. `pm2 delete minecraft-agents && pm2 start` - session ended before verification
+
+- **Status: INCONCLUSIVE**
+  - Session ended before we could verify if fresh start fixed the messaging issue
+  - Agents are currently NOT running
+  - Last activity: builder_2 at Feb 9 00:37
+
+- **Next Steps When Resuming**:
+  1. Start agents fresh: `npx pm2 start 'npx tsx src/main-multi.ts' --name minecraft-agents`
+  2. Verify builders do NOT have messaging tools available
+  3. Observe if structured workflow (DECIDE → BLUEPRINT → BUILD → VERIFY) is followed
+  4. Update Learning #6 with results
+
 ---
 
 ## Architecture Reference

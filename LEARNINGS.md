@@ -454,6 +454,93 @@ Persistent memory may need clearing for full personality reset.
 
 ---
 
+## Learning #6: Behavioral Contagion - Patterns Spread Through Agent Communication
+
+**Date:** 2026-02-09
+
+**Status:** 🔬 INVESTIGATING
+
+### Symptom
+- Cleared all memory files (blueprints.json, scripts.json, world-index.json)
+- Restarted supervisors for fresh conversations
+- Agents STILL exhibit old behavioral patterns ("portfolio tracking", "verification percentages")
+- Pattern appears within minutes of restart
+
+### Observation
+
+**Memory files are NOT where behavioral patterns live.**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│            WHERE PATTERNS COULD LIVE                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   Memory Files (blueprints.json, etc.)                      │
+│   └── Cleared ✓                                             │
+│   └── Pattern persisted → NOT the source                    │
+│                                                             │
+│   Conversation History (AI context window)                  │
+│   └── Reset via supervisor restart ✓                        │
+│   └── Pattern returned quickly → NOT the only source        │
+│                                                             │
+│   Inter-Agent Messages                                      │
+│   └── Agent A sends "portfolio" message                     │
+│   └── Agent B receives, adopts vocabulary                   │
+│   └── Both reinforce pattern through communication          │
+│   └── Pattern SPREADS even after individual resets          │  ← SUSPECTED
+│                                                             │
+│   Emergent Behavior                                         │
+│   └── Pattern naturally develops when agents coordinate     │
+│   └── Would re-emerge even with all resets                  │ ← POSSIBLE
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Evidence
+
+After memory clear + supervisor restart:
+- Builder Bob immediately resumed "portfolio tracking" language
+- Messages reference structures from BEFORE the reset
+- Agents converged on shared vocabulary within minutes
+
+**Timeline:**
+```
+23:19 - Memory cleared, supervisors restarted
+23:19 - Builder Max: "Building: Medical Research Lab..." (new workflow!)
+23:20 - Builder Bob: "Observatory 71.7%, Academy 76.1%..." (old pattern!)
+23:21 - Builder Max: "Blueprint: Medical Research Lab, 43 ops" (new workflow!)
+23:21 - Builder Bob: "Educational district portfolio..." (old pattern!)
+23:22 - Builder Max adopts Bob's "verification %" vocabulary
+```
+
+**Hypothesis:** Builder Bob's messages "infected" Builder Max with the old pattern.
+
+### Proposed Fix
+
+**Disable inter-agent messaging temporarily:**
+- Remove sendMessage, getMessages, broadcastMessage tools
+- Each agent works in isolation
+- Observe if structured workflow is followed without peer influence
+
+### Verification Criteria
+
+After disabling messaging, check if:
+- [ ] Agents announce "I will build: X at Y,Z" before building
+- [ ] Agents create blueprints before placing blocks
+- [ ] Agents complete one structure before starting another
+- [ ] NO "portfolio" or "verification %" language appears
+
+### Key Takeaway (Tentative)
+
+> **In multi-agent systems, behavioral patterns can be contagious.**
+> One agent's communication style can spread to others, creating
+> self-reinforcing patterns that survive individual resets.
+>
+> To truly reset behavior, you may need to isolate agents and
+> prevent cross-contamination of behavioral patterns.
+
+---
+
 ## Future Learnings
 
 *Add new learnings as they're discovered...*
@@ -471,6 +558,7 @@ Persistent memory may need clearing for full personality reset.
 | Echo Chamber | Agents reinforce false beliefs | Cross-check with world state | Ground truth validation |
 | Verbose Prompts | Instructions get skimmed/ignored | Agents don't follow workflow | Structured prompts with visual hierarchy |
 | Cached Context | Personality changes don't take effect | Old behavior persists | Restart supervisor conversations |
+| Behavioral Contagion | Patterns spread via messages | Old vocab returns after reset | Isolate agents (disable messaging) |
 
 ---
 

@@ -854,8 +854,12 @@ export class Supervisor {
 
     type ToolName = keyof typeof tools;
     // Multi-agent communication tools - available in all modes
+    // EXPERIMENT: Disable messaging for builders to test if behavioral patterns spread through communication
+    const isBuilder = this.personality?.role === 'builder';
     const multiAgentToolNames: ToolName[] = this.coordinator
-      ? ['sendMessage', 'broadcastMessage', 'getMessages', 'listAgents', 'claimRegion', 'releaseRegion', 'extendClaim', 'getClaimedRegions']
+      ? isBuilder
+        ? ['listAgents', 'claimRegion', 'releaseRegion', 'extendClaim', 'getClaimedRegions'] // Builders: NO messaging, keep region tools
+        : ['sendMessage', 'broadcastMessage', 'getMessages', 'listAgents', 'claimRegion', 'releaseRegion', 'extendClaim', 'getClaimedRegions']
       : [];
 
     const modeActiveTools: Record<SupervisorMode, ToolName[]> = {

@@ -182,7 +182,9 @@ You are one of multiple agents working together in this world. Coordinate with o
   }
 
   // 4. Multi-agent context
-  if (multiAgent && multiAgent.otherAgents.length > 0) {
+  // EXPERIMENT: Builders don't get messaging instructions (testing isolated behavior)
+  const isBuilder = multiAgent?.personality?.role === 'builder';
+  if (multiAgent && multiAgent.otherAgents.length > 0 && !isBuilder) {
     const agentList = multiAgent.otherAgents
       .map(a => `- ${a.name} (${a.agentId}): ${a.role}`)
       .join('\n');
@@ -202,12 +204,21 @@ You are one of multiple agents working together in this world. Coordinate with o
   ];
 
   if (multiAgent) {
-    toolHints.push(
-      '- listAgents: see other agents and their roles',
-      '- getMessages: check messages from other agents',
-      '- claimRegion: reserve an area before building',
-      '- getClaimedRegions: see where others are working',
-    );
+    // Builders only get region tools, not messaging (experiment to test isolated behavior)
+    if (isBuilder) {
+      toolHints.push(
+        '- listAgents: see other agents and their roles',
+        '- claimRegion: reserve an area before building',
+        '- getClaimedRegions: see where others are working',
+      );
+    } else {
+      toolHints.push(
+        '- listAgents: see other agents and their roles',
+        '- getMessages: check messages from other agents',
+        '- claimRegion: reserve an area before building',
+        '- getClaimedRegions: see where others are working',
+      );
+    }
   }
 
   contextParts.push(`## Context (pull via tools)\nCall these as needed:\n${toolHints.join('\n')}`);
