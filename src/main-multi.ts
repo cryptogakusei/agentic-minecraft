@@ -59,13 +59,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     viewerPort: 3001,
     dataDir: '.data/agents/builder_1',
   },
-  {
-    agentId: 'explorer_1',
-    username: 'ExplorerBot',
-    personality: PERSONALITIES.explorer!,
-    viewerPort: 3002,
-    dataDir: '.data/agents/explorer_1',
-  },
+  // Explorer Emma removed - was building instead of exploring
   {
     agentId: 'builder_2',
     username: 'BuilderMax',

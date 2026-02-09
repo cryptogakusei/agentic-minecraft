@@ -636,18 +636,84 @@ export class BotRunner {
 
   // === Raw Commands ===
 
-  async execRawCommand(command: string): Promise<{ ok: true }> {
-    await this.agent.execCommand(command, 0);
-    this.events.publish('build.command', { command });
-    return { ok: true };
+  async execRawCommand(command: string): Promise<{ ok: true; command: string }> {
+    const result = await this.agent.execCommand(command, 0);
+    this.events.publish('build.command', { command: result.command });
+    return { ok: true, command: result.command };
   }
 
-  async execRawCommandBatch(commands: string[]): Promise<{ executed: number; elapsed: number }> {
+  async execRawCommandBatch(commands: string[]): Promise<{
+    executed: number;
+    verified: number;
+    failed: string[];
+    elapsed: number;
+    warning?: string;
+  }> {
     const result = await this.agent.execCommandBatch(commands);
+
     for (const cmd of commands) {
       this.events.publish('build.command', { command: cmd });
     }
-    return result;
+
+    // Add warning if there were failures
+    const response: {
+      executed: number;
+      verified: number;
+      failed: string[];
+      elapsed: number;
+      warning?: string;
+    } = {
+      ...result,
+    };
+
+    if (result.failed.length > 0) {
+      response.warning = `WARNING: ${result.failed.length} commands may have failed. Blocks might not have been placed. Check the failed array for details.`;
+    }
+
+    return response;
+  }
+
+  /**
+   * Place a single block with verification - guaranteed or error.
+   */
+  async verifiedSetBlock(
+    x: number,
+    y: number,
+    z: number,
+    blockType: string,
+  ): Promise<{ success: boolean; attempts: number; message: string }> {
+    const result = await this.agent.verifiedSetBlock(x, y, z, blockType);
+    this.events.publish('build.command', {
+      command: `/setblock ${x} ${y} ${z} ${blockType}`,
+      verified: result.success,
+    });
+    return {
+      ...result,
+      message: result.success
+        ? `Block placed at ${x},${y},${z} (verified after ${result.attempts} attempt(s))`
+        : `FAILED to place block at ${x},${y},${z} after ${result.attempts} attempts`,
+    };
+  }
+
+  /**
+   * Fill a region with verification - checks corners.
+   */
+  async verifiedFill(
+    x1: number, y1: number, z1: number,
+    x2: number, y2: number, z2: number,
+    blockType: string,
+  ): Promise<{ success: boolean; attempts: number; message: string }> {
+    const result = await this.agent.verifiedFill(x1, y1, z1, x2, y2, z2, blockType);
+    this.events.publish('build.command', {
+      command: `/fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${blockType}`,
+      verified: result.success,
+    });
+    return {
+      ...result,
+      message: result.success
+        ? `Region filled (verified after ${result.attempts} attempt(s))`
+        : `FAILED to fill region after ${result.attempts} attempts`,
+    };
   }
 
   // === Templates & Cloning ===

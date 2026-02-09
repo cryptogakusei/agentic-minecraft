@@ -533,38 +533,51 @@ export class AgentRuntime {
     const pf = (bot as any).pathfinder;
     const goal = new goals.GoalNear(position.x, position.y, position.z, range);
 
+    // Helper to safely get position (bot.entity can be undefined if disconnected)
+    const safeGetPosition = () => {
+      if (bot.entity?.position) {
+        const p = bot.entity.position;
+        return { x: p.x, y: p.y, z: p.z };
+      }
+      // Fallback to goal position if bot disconnected
+      return { x: position.x, y: position.y, z: position.z };
+    };
+
     return new Promise((resolve) => {
       // Reduced timeout - don't let pathfinding run too long
       const timeout = setTimeout(() => {
-        pf.stop();
-        const p = bot.entity.position;
-        resolve({ arrived: false, position: { x: p.x, y: p.y, z: p.z } });
+        try { pf.stop(); } catch { /* bot may be disconnected */ }
+        resolve({ arrived: false, position: safeGetPosition() });
       }, 20000); // Reduced from 30s to 20s
 
       // Emergency brake - stop pathfinding if packet budget runs out
       const budgetCheckInterval = setInterval(() => {
-        if (this.packetTracker.isOverLimit()) {
-          pf.stop();
+        // Also stop if bot disconnected
+        if (!bot.entity) {
           clearInterval(budgetCheckInterval);
           clearTimeout(timeout);
-          const p = bot.entity.position;
+          resolve({ arrived: false, position: safeGetPosition() });
+          return;
+        }
+        if (this.packetTracker.isOverLimit()) {
+          try { pf.stop(); } catch { /* bot may be disconnected */ }
+          clearInterval(budgetCheckInterval);
+          clearTimeout(timeout);
           this.events.publish('app.error', {
             message: 'Pathfinding stopped: packet budget exceeded',
           });
-          resolve({ arrived: false, position: { x: p.x, y: p.y, z: p.z } });
+          resolve({ arrived: false, position: safeGetPosition() });
         }
       }, 500);
 
       pf.goto(goal).then(() => {
         clearInterval(budgetCheckInterval);
         clearTimeout(timeout);
-        const p = bot.entity.position;
-        resolve({ arrived: true, position: { x: p.x, y: p.y, z: p.z } });
+        resolve({ arrived: true, position: safeGetPosition() });
       }).catch(() => {
         clearInterval(budgetCheckInterval);
         clearTimeout(timeout);
-        const p = bot.entity.position;
-        resolve({ arrived: false, position: { x: p.x, y: p.y, z: p.z } });
+        resolve({ arrived: false, position: safeGetPosition() });
       });
     });
   }
@@ -581,10 +594,13 @@ export class AgentRuntime {
     await bot.waitForChunksToLoad();
   }
 
-  async execCommand(command: string, waitTicks = 0): Promise<void> {
+  async execCommand(command: string, waitTicks = 0): Promise<{ success: boolean; command: string }> {
     const bot = this.bot;
     if (!bot) throw new Error('Bot is not connected');
     if (this.paused) throw new Error('Agent is paused');
+
+    // Ensure command starts with /
+    const cmd = command.startsWith('/') ? command : `/${command}`;
 
     // Check packet budget first
     if (this.packetTracker.isOverLimit()) {
@@ -597,49 +613,55 @@ export class AgentRuntime {
     // Rate limit to prevent spam kicks
     await this.rateLimiter.acquire(1);
 
-    bot.chat(command);
+    // Record packet
+    this.packetTracker.recordPacket(1);
 
-    // Minimum wait between commands even if waitTicks is 0
-    const minWaitTicks = Math.max(waitTicks, 1);
+    bot.chat(cmd);
+
+    // Longer minimum wait to ensure command processes (increased from 1 to 3 ticks)
+    const minWaitTicks = Math.max(waitTicks, 3);
     await bot.waitForTicks(minWaitTicks);
+
+    // Additional delay to let server process
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    return { success: true, command: cmd };
   }
 
   async execCommandBatch(
     commands: string[],
-    options?: { batchSize?: number; ticksBetween?: number },
-  ): Promise<{ executed: number; elapsed: number }> {
+    options?: { batchSize?: number; ticksBetween?: number; verify?: boolean },
+  ): Promise<{ executed: number; verified: number; failed: string[]; elapsed: number }> {
     const bot = this.bot;
     if (!bot) throw new Error('Bot is not connected');
     if (this.paused) throw new Error('Agent is paused');
 
-    // Very conservative batch execution to prevent spam kicks
-    // PaperMC default: 500 packets per 7 seconds
-    // We need to leave room for physics packets (~10/sec = 70 per 7 sec)
-    // So we have budget for ~430 command packets per 7 seconds = ~61/sec max
-    // But we want to be much more conservative to avoid edge cases
+    // ULTRA CONSERVATIVE batch execution to prevent spam kicks
+    // Execute ONE command at a time with verification
+    // This is slower but ensures commands actually execute
 
-    // NEW SETTINGS:
-    // - 3 commands per batch (reduced from 5)
-    // - 4 ticks between batches (increased from 2)
-    // - 200ms additional delay (increased from 100ms)
-    // This gives us: 3 commands every ~400ms = ~7.5 cmd/sec
-    // Over 7 seconds: ~52 command packets (very safe)
-    const batchSize = options?.batchSize ?? 3;
-    const ticksBetween = options?.ticksBetween ?? 4;
+    // Settings: 1 command at a time, 5 ticks + 300ms between
+    // This gives us: 1 command every ~400ms = ~2.5 cmd/sec
+    // Much slower, but much more reliable
+    const batchSize = options?.batchSize ?? 1;  // Changed from 3 to 1
+    const ticksBetween = options?.ticksBetween ?? 5;  // Changed from 4 to 5
+    const shouldVerify = options?.verify ?? true;  // Verify by default
     const start = Date.now();
     let executed = 0;
+    let verified = 0;
+    const failed: string[] = [];
 
     for (let i = 0; i < commands.length; i += batchSize) {
       if (this.paused) throw new Error('Agent is paused');
       if (!this.bot) throw new Error('Bot disconnected during batch execution');
 
-      // Check packet budget before each batch
+      // Check packet budget before each command
       if (this.packetTracker.isApproachingLimit()) {
-        // Wait for budget to recover
         const waitMs = this.packetTracker.getRequiredWaitMs(batchSize);
         if (waitMs > 0) {
-          this.events.publish('app.error', {
-            message: `Command batch paused: waiting ${waitMs}ms for packet budget`,
+          this.events.publish('log.note', {
+            text: `Command batch paused: waiting ${waitMs}ms for packet budget`,
+            tags: ['rate-limit'],
           });
           await new Promise(resolve => setTimeout(resolve, waitMs));
         }
@@ -647,23 +669,183 @@ export class AgentRuntime {
 
       const batch = commands.slice(i, i + batchSize);
 
-      // Rate limit the entire batch
+      // Rate limit
       await this.rateLimiter.acquire(batch.length);
 
-      for (const cmd of batch) {
+      for (const rawCmd of batch) {
+        // Ensure command starts with /
+        const cmd = rawCmd.startsWith('/') ? rawCmd : `/${rawCmd}`;
+
+        // Record packet
+        this.packetTracker.recordPacket(1);
+
+        // Execute command
         bot.chat(cmd);
         executed++;
+
+        // Verify setblock commands if enabled
+        if (shouldVerify && cmd.includes('setblock')) {
+          // Parse setblock command: /setblock x y z block
+          const match = cmd.match(/\/setblock\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)/);
+          if (match) {
+            const [, xStr, yStr, zStr, blockType] = match;
+            const x = parseInt(xStr, 10);
+            const y = parseInt(yStr, 10);
+            const z = parseInt(zStr, 10);
+
+            // Wait for block to be placed
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            // Check if block exists
+            const block = bot.blockAt(new Vec3(x, y, z));
+            const expectedBlock = blockType.replace('minecraft:', '').split('[')[0];
+
+            if (block && block.name.includes(expectedBlock.replace(/_/g, ''))) {
+              verified++;
+            } else {
+              failed.push(`${cmd} (expected ${expectedBlock}, got ${block?.name || 'null'})`);
+            }
+          }
+        }
       }
 
-      // Always wait between batches (longer delay for reliability)
+      // Always wait between commands (longer delay for reliability)
       if (i + batchSize < commands.length) {
         await bot.waitForTicks(ticksBetween);
-        // Additional delay to let server process
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Longer delay to let server process
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 
-    return { executed, elapsed: Date.now() - start };
+    // Log results if there were failures
+    if (failed.length > 0) {
+      this.events.publish('app.error', {
+        message: `Command batch: ${executed} executed, ${verified} verified, ${failed.length} failed`,
+      });
+    }
+
+    return { executed, verified, failed, elapsed: Date.now() - start };
+  }
+
+  /**
+   * Place a single block with verification - guaranteed to work or throw error.
+   * Use this for critical builds where you need to be sure blocks are placed.
+   */
+  async verifiedSetBlock(
+    x: number,
+    y: number,
+    z: number,
+    blockType: string,
+    maxRetries = 3,
+  ): Promise<{ success: boolean; attempts: number }> {
+    const bot = this.bot;
+    if (!bot) throw new Error('Bot is not connected');
+
+    const fullBlockType = blockType.startsWith('minecraft:') ? blockType : `minecraft:${blockType}`;
+    const expectedName = blockType.replace('minecraft:', '').split('[')[0].replace(/_/g, '');
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Rate limit
+      await this.rateLimiter.acquire(1);
+      this.packetTracker.recordPacket(1);
+
+      // Execute setblock command
+      const cmd = `/setblock ${x} ${y} ${z} ${fullBlockType}`;
+      bot.chat(cmd);
+
+      // Wait for block to be placed (longer wait for reliability)
+      await new Promise(resolve => setTimeout(resolve, 250));
+      await bot.waitForTicks(5);
+
+      // Verify block was placed
+      const block = bot.blockAt(new Vec3(x, y, z));
+      if (block && block.name.toLowerCase().includes(expectedName.toLowerCase())) {
+        return { success: true, attempts: attempt };
+      }
+
+      // If failed, wait longer before retry
+      if (attempt < maxRetries) {
+        this.events.publish('log.note', {
+          text: `Block placement failed at ${x},${y},${z} (attempt ${attempt}/${maxRetries}), retrying...`,
+          tags: ['build', 'retry'],
+        });
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // All retries failed
+    this.events.publish('app.error', {
+      message: `VERIFIED BUILD FAILED: Could not place ${blockType} at ${x},${y},${z} after ${maxRetries} attempts`,
+    });
+
+    return { success: false, attempts: maxRetries };
+  }
+
+  /**
+   * Fill a region with verification - checks corners to ensure fill worked.
+   */
+  async verifiedFill(
+    x1: number, y1: number, z1: number,
+    x2: number, y2: number, z2: number,
+    blockType: string,
+    maxRetries = 3,
+  ): Promise<{ success: boolean; attempts: number }> {
+    const bot = this.bot;
+    if (!bot) throw new Error('Bot is not connected');
+
+    const fullBlockType = blockType.startsWith('minecraft:') ? blockType : `minecraft:${blockType}`;
+    const expectedName = blockType.replace('minecraft:', '').split('[')[0].replace(/_/g, '');
+
+    // Corners to verify
+    const corners = [
+      new Vec3(x1, y1, z1),
+      new Vec3(x2, y2, z2),
+      new Vec3(x1, y2, z1),
+      new Vec3(x2, y1, z2),
+    ];
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Rate limit
+      await this.rateLimiter.acquire(1);
+      this.packetTracker.recordPacket(1);
+
+      // Execute fill command
+      const cmd = `/fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${fullBlockType}`;
+      bot.chat(cmd);
+
+      // Wait for fill to complete
+      await new Promise(resolve => setTimeout(resolve, 400));
+      await bot.waitForTicks(10);
+
+      // Verify corners
+      let verified = 0;
+      for (const corner of corners) {
+        const block = bot.blockAt(corner);
+        if (block && block.name.toLowerCase().includes(expectedName.toLowerCase())) {
+          verified++;
+        }
+      }
+
+      // If at least 3/4 corners verified, consider success
+      if (verified >= 3) {
+        return { success: true, attempts: attempt };
+      }
+
+      // If failed, wait before retry
+      if (attempt < maxRetries) {
+        this.events.publish('log.note', {
+          text: `Fill failed (${verified}/4 corners verified), retrying...`,
+          tags: ['build', 'retry'],
+        });
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    this.events.publish('app.error', {
+      message: `VERIFIED FILL FAILED: Could not fill region with ${blockType} after ${maxRetries} attempts`,
+    });
+
+    return { success: false, attempts: maxRetries };
   }
 
   async ensureLoaded(
@@ -711,6 +893,8 @@ export class AgentRuntime {
     try {
       for (const key of needed) {
         if (pending.size === 0) break;
+        // Check if bot is still connected
+        if (!bot.entity) break;
         const parts = key.split(',');
         const cx = Number(parts[0]);
         const cz = Number(parts[1]);

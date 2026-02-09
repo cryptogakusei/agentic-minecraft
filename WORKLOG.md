@@ -4,7 +4,7 @@
 - **Architecture**: Two-EC2 deployment (Minecraft + Agents separated)
 - **Minecraft Server**: AWS EC2 #1 (18.217.111.253:25565)
 - **Agent Server**: AWS EC2 #2 (18.222.122.59:8080)
-- **Active Agents**: 6 total (2 builders, 1 explorer, 3 warriors)
+- **Active Agents**: 5 total (2 builders, 3 warriors)
 - **Process Manager**: pm2 with tsx (auto-restart on boot)
 - **Builder Philosophy**: Blueprint → Complete Build → Verify → Move On
 - **Warrior Philosophy**: 99% combat, silent mob extermination
@@ -278,6 +278,133 @@
   - Must have open sky above build location
   - If in cave/enclosed space, walkTo surface first
   - Complete structures with: floor, walls, roof, door, interior
+
+### 2026-02-09 (Explorer Role Fix)
+
+- **Fixed Explorer Building Problem**
+  - Explorer Emma was building rail networks (8000+ blocks out) instead of scouting
+  - She was sending many messages asking builders for help (violating 90/10 rule)
+  - Explorers should NEVER build - only scout and report
+
+- **Updated Explorer Personality**
+  - Changed ratio from 90/10 to **95% explore / 5% report / 0% BUILD**
+  - Added explicit "YOU DO NOT BUILD. EVER. NOT A SINGLE BLOCK." rule
+  - Forbade: /setblock, /fill, execCommandBatch for building
+  - Forbade: coordinating, asking for help, responding to messages
+  - New value metric: "DISTANCE COVERED, not blocks placed"
+
+- **Role Separation Clarified**
+  | Role | Builds? | Talks? | Primary Activity |
+  |------|---------|--------|------------------|
+  | Builder | ✅ 95% | 5% | Construct structures |
+  | Explorer | ❌ 0% | 5% | Scout and report coords |
+  | Warrior | ❌ 0% | 1% | Kill mobs silently |
+
+### 2026-02-09 (Explorer Removed)
+
+- **Removed Explorer Emma**
+  - Emma was building void rail networks (8000+ blocks out) instead of scouting
+  - Sent excessive messages asking for help (violated 90/10 rule)
+  - Personality update didn't fix behavior due to cached supervisor context
+  - Decision: Remove explorer role entirely, focus on builders + warriors
+
+### 2026-02-09 (Phantom Builds Fix & Bodyguard Mode)
+
+- **CRITICAL BUG FIX: Phantom Builds**
+  - **Problem**: AI agents reported completing builds but no blocks were placed
+  - **Root Cause**: `bot.chat('/setblock...')` was being treated as chat message, not command
+    - Chat messages were spam-filtered by PaperMC
+    - AI received no error feedback → assumed success → updated memory as complete
+    - Result: Agents "built" imaginary cities with zero actual blocks
+  - **Evidence**: Server logs showed `[Not Secure] <BuilderBot> setblock...` (chat, filtered)
+    instead of `BuilderBot issued server command: /setblock...` (command, executed)
+
+  - **Fix Applied in `agent-runtime.ts`**:
+    1. Ensured all commands start with `/` prefix
+    2. Slowed execution: 1 command per batch (was 3), 300ms delay (was 200ms)
+    3. Added block verification after setblock commands
+    4. Added `verifiedSetBlock()` with retry logic (up to 3 attempts)
+    5. Added `verifiedFill()` for verified area fills
+    6. Record packets to track budget and avoid spam kicks
+
+  - **Verification**: Server logs now show `issued server command:` prefix
+
+- **Warrior Bodyguard Mode**
+  - **Problem**: Warriors patrolled fixed coordinates while builders died 250+ times
+  - **Fix**: Changed warriors from static patrols to dynamic bodyguards
+
+  - **New Warrior Behaviors**:
+    | Warrior | Old Behavior | New Behavior |
+    |---------|--------------|--------------|
+    | Warrior Wolf | Roaming patrol | Bodyguard for Builder Bob |
+    | Warrior Shadow | Underground clearing | Bodyguard for Builder Max |
+    | Warrior Stone | Stationary guard at (0,100,0) | Rotates between both builders |
+
+  - **Bodyguard Loop**:
+    1. `listAgents` to find builder's current position
+    2. `/tp @s BuilderBot` to teleport to builder
+    3. Kill all mobs within 30-40 blocks
+    4. Wait 3-5 seconds
+    5. Repeat forever
+
+  - **Key Insight**: Guard the asset (player), not the location (coordinates)
+    Use `/tp @s BuilderBot` instead of `/tp @s 0 100 0`
+
+- **Created LEARNINGS.md**
+  - New documentation file for multi-agent engineering lessons
+  - Documents 3 failure modes:
+    1. Phantom Builds (AI hallucinating completed work)
+    2. Role Drift (Explorer becoming builder)
+    3. Bodyguard Problem (Warriors patrolling empty zones)
+  - Includes trust hierarchy diagram and architecture principles
+  - Location: `/LEARNINGS.md`
+
+- **Current Agent Roster (5 Agents)**
+  | Agent | Role | Port | Behavior |
+  |-------|------|------|----------|
+  | Builder Bob | builder | 3001 | Blueprint-first, methodical |
+  | Builder Max | builder | 3003 | Fast but complete builds |
+  | Warrior Wolf | warrior | 3004 | **Bodyguard for Builder Bob** |
+  | Warrior Shadow | warrior | 3005 | **Bodyguard for Builder Max** |
+  | Warrior Stone | warrior | 3006 | **Rotates between both builders** |
+
+- **Build Verification Status**
+  - Builders now placing REAL blocks (confirmed via MC server logs)
+  - Copper stairs, copper bulbs, weathered copper, chains, signs visible
+  - Structures: "Blacksmith Workshop", "Grocery Shop", "Public Library", "Modern House"
+  - Y-level 145-165 bridge construction confirmed
+
+### 2026-02-09 (Async Crash Fix & Build Progress)
+
+- **Fixed Async Callback Crash**
+  - **Error**: `TypeError: Cannot read properties of undefined (reading 'position')`
+  - **Cause**: `walkTo()` timeout/interval callbacks accessed `bot.entity.position` after bot disconnected
+  - **Fix**: Added `safeGetPosition()` helper with optional chaining and fallback values
+  - **Also fixed**: Chunk loading loop now checks `if (!bot.entity) break;`
+  - Added to LEARNINGS.md as Learning #4
+
+- **Confirmed Build Progress (from Server Logs)**
+  - 778+ build commands executed and verified
+  - **Builder Bob structures**:
+    - Service District Hub (150, 170, 110) - Cable network signs
+    - Blacksmith Workshop (48, 82, 8)
+    - Grocery Shop (35, 77, 0)
+    - Public Library (58, 83, 11)
+    - Modern House (32, 80, 18) - "Resident: Cleric"
+    - Quartz Beacon Monument (85, 157, 117)
+    - Polished Granite Plaza (90-110, 145, 32-48)
+  - **Builder Max structures**:
+    - Cherry Library (20, 103, -10)
+    - Bamboo Farm (5, 63, 12)
+    - Birch Harbor (37, 62, -16)
+    - Modern Tower #1 (50, 150, 30) - White/gray concrete, iron bars
+    - Modern Tower #2 (80, 180, 60) - Sea lantern rooftop
+    - Deepslate Skyscraper (46, 150, 63)
+
+- **Warrior Bodyguard Mode Verified**
+  - WarriorStone executed `/tp @s BuilderMax` (confirmed in server logs)
+  - All warriors actively killing mobs (zombies, skeletons, phantoms, etc.)
+  - Kill radius: 40-75 blocks depending on warrior
 
 ---
 

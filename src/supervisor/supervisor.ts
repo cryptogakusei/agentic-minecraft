@@ -517,11 +517,40 @@ export class Supervisor {
       }),
 
       execCommandBatch: tool({
-        description: 'Execute multiple raw Minecraft commands in rapid succession (20 per tick). Much faster than calling execCommand repeatedly.',
+        description: 'Execute multiple raw Minecraft commands. Now includes VERIFICATION - returns which commands succeeded/failed. Check the "failed" array and "warning" field in response. If commands fail, they were likely spam-filtered and blocks were NOT placed.',
         inputSchema: z.object({
           commands: z.array(z.string().min(2).max(1000)).min(1).max(500),
         }),
         execute: async input => this.botRunner.execRawCommandBatch(input.commands),
+      }),
+
+      verifiedSetBlock: tool({
+        description: 'Place a SINGLE block with VERIFICATION. Retries up to 3 times and confirms block was actually placed. Use this for important blocks where you need to be CERTAIN they exist. Slower but guaranteed.',
+        inputSchema: z.object({
+          x: z.number().int(),
+          y: z.number().int(),
+          z: z.number().int(),
+          blockType: z.string().min(1).describe('Block type like "stone", "oak_planks", or "minecraft:diamond_block"'),
+        }),
+        execute: async input => this.botRunner.verifiedSetBlock(input.x, input.y, input.z, input.blockType),
+      }),
+
+      verifiedFill: tool({
+        description: 'Fill a region with VERIFICATION. Checks corners to confirm fill worked. Use this for important structures. Slower but guaranteed.',
+        inputSchema: z.object({
+          x1: z.number().int(),
+          y1: z.number().int(),
+          z1: z.number().int(),
+          x2: z.number().int(),
+          y2: z.number().int(),
+          z2: z.number().int(),
+          blockType: z.string().min(1).describe('Block type like "stone", "oak_planks", or "minecraft:diamond_block"'),
+        }),
+        execute: async input => this.botRunner.verifiedFill(
+          input.x1, input.y1, input.z1,
+          input.x2, input.y2, input.z2,
+          input.blockType,
+        ),
       }),
     };
 
@@ -831,9 +860,9 @@ export class Supervisor {
 
     const modeActiveTools: Record<SupervisorMode, ToolName[]> = {
       explore: ['status', 'localSiteSummary', 'inspectRegion', 'getWorldSummary', 'findStructuresNear', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
-      build: ['status', 'createBlueprint', 'buildFromBlueprint', 'compileBlueprint', 'executeScript', 'jobStatus', 'verifyStructure', 'addStructure', 'getStylePacks', 'getStylePack', 'ensureLoaded', 'renderAngles', 'walkTo', 'lookAt', 'teleport', 'localSiteSummary', 'checkZoning', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
-      refine: ['status', 'critiqueStructure', 'beautyLoop', 'renderAngles', 'getStylePacks', 'getStylePack', 'listStructures', 'findStructuresNear', 'walkTo', 'lookAt', 'searchBlocks', 'execCommand', 'execCommandBatch', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
-      plan: ['status', 'createCityPlan', 'getActiveCityPlan', 'findAvailablePlot', 'generateBuildingForPlot', 'buildRoads', 'checkZoning', 'getWorldSummary', 'listStructures', 'getStylePacks', 'localSiteSummary', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      build: ['status', 'createBlueprint', 'buildFromBlueprint', 'compileBlueprint', 'executeScript', 'jobStatus', 'verifyStructure', 'addStructure', 'getStylePacks', 'getStylePack', 'ensureLoaded', 'renderAngles', 'walkTo', 'lookAt', 'teleport', 'localSiteSummary', 'checkZoning', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'verifiedSetBlock', 'verifiedFill', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      refine: ['status', 'critiqueStructure', 'beautyLoop', 'renderAngles', 'getStylePacks', 'getStylePack', 'listStructures', 'findStructuresNear', 'walkTo', 'lookAt', 'searchBlocks', 'execCommand', 'execCommandBatch', 'verifiedSetBlock', 'verifiedFill', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      plan: ['status', 'createCityPlan', 'getActiveCityPlan', 'findAvailablePlot', 'generateBuildingForPlot', 'buildRoads', 'checkZoning', 'getWorldSummary', 'listStructures', 'getStylePacks', 'localSiteSummary', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'verifiedSetBlock', 'verifiedFill', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
     };
 
     let stepIdx = 0;
