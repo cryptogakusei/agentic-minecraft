@@ -338,6 +338,86 @@ PHASE 1: DECIDE (before ANY building)
 
 ---
 
+## Learning #5: Cached Context - Personality Changes Don't Apply Immediately
+
+**Date:** 2026-02-09
+
+### Symptom
+- Updated builder personality in `agent-config.ts`
+- Restarted the application with `pm2 restart`
+- Builders continue old behavior, ignore new workflow
+- New personality seems to have no effect
+
+### Root Cause
+
+**The system prompt is only read when a conversation STARTS, not during it.**
+
+```
+Timeline:
+─────────────────────────────────────────────────────────────
+  T=0          T=1              T=2              T=3
+  │            │                │                │
+  ▼            ▼                ▼                ▼
+Start       Edit            pm2 restart      AI still uses
+supervisor  agent-config.ts  (loads new       OLD personality
+            (new personality) code, but        (cached in
+                              conversation     conversation
+                              continues)       context)
+─────────────────────────────────────────────────────────────
+```
+
+The problem:
+1. Supervisor starts → creates conversation with Claude → system prompt sent ONCE
+2. Personality is part of system prompt → "baked in" to conversation
+3. Code changes load new personality into memory
+4. BUT existing conversation keeps running with OLD context
+5. AI never sees the new personality until conversation restarts
+
+### Why This Is Counterintuitive
+
+- We expect "restart" to reset everything
+- `pm2 restart` restarts the Node.js process
+- BUT supervisor may reconnect to existing conversation state
+- OR conversation context persists in the AI's sliding window
+- The personality feels like config, but it's actually part of conversation history
+
+### Fix Applied
+
+**Force restart supervisors (not just the application):**
+
+```bash
+# Stop all supervisors (ends conversations)
+curl -X POST http://server:8080/v1/supervisors/stop-all
+
+# Start all supervisors (creates NEW conversations)
+curl -X POST http://server:8080/v1/supervisors/start-all
+```
+
+This:
+1. Terminates existing AI conversations
+2. Creates fresh conversations
+3. New conversations read the UPDATED personality
+4. AI behavior changes immediately
+
+### Prevention Strategies
+
+| Strategy | Pros | Cons |
+|----------|------|------|
+| Supervisor restart API | Immediate effect | Loses conversation history |
+| Shorter episode cycles | Faster personality pickup | More API calls, less context |
+| Personality in user message | Can update mid-conversation | Clutters every message |
+| Version check in prompt | Detect stale personality | Complex implementation |
+
+### Key Takeaway
+
+> **"Restarting the app" ≠ "Restarting the AI conversation"**
+>
+> In long-running AI agents, the system prompt is read ONCE at conversation start.
+> Personality changes require ending and restarting the conversation, not just
+> the application process. Design your system with a "reload personality" mechanism.
+
+---
+
 ## Future Learnings
 
 *Add new learnings as they're discovered...*
@@ -354,6 +434,7 @@ PHASE 1: DECIDE (before ANY building)
 | Spam Kicks | Commands filtered as spam | Server logs | Rate limiting |
 | Echo Chamber | Agents reinforce false beliefs | Cross-check with world state | Ground truth validation |
 | Verbose Prompts | Instructions get skimmed/ignored | Agents don't follow workflow | Structured prompts with visual hierarchy |
+| Cached Context | Personality changes don't take effect | Old behavior persists | Restart supervisor conversations |
 
 ---
 
