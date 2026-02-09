@@ -1,9 +1,11 @@
 # Minecraft AI Bot - Work Log
 
 ## Current Status
-- **Multi-Agent**: Running locally with 4 agents
-- **Minecraft Server**: AWS (18.217.111.253)
-- **Agents**: Builder Bob, Explorer Emma, Builder Max, Observer
+- **Architecture**: Two-EC2 deployment (Minecraft + Agents separated)
+- **Minecraft Server**: AWS EC2 #1 (18.217.111.253:25565)
+- **Agent Server**: AWS EC2 #2 (18.222.122.59:8080)
+- **Agents**: Builder Bob, Explorer Emma (+ Builder Max available)
+- **Process Manager**: pm2 with auto-restart on boot
 
 ---
 
@@ -144,11 +146,6 @@
   - Builder Max (builder_2) - fast aggressive builder - port 3003
   - Observer (observer_1) - passive survey camera - port 3004
 
-- **Local Development Setup**
-  - Supervisor runs locally (your machine makes Claude API calls)
-  - Minecraft server remains on AWS
-  - Updated `.env` with `MC_HOST=18.217.111.253`
-
 - **Current Build Progress**
   - Village Blacksmith at (-58, 62, -3)
   - Dark Oak Neighbor House at (-46, 62, -11)
@@ -156,6 +153,33 @@
   - Market Square at (-50, 62, -50)
   - Terraced hillside houses at Y:115
   - Marketplace plaza at (-65, 62, 0)
+  - Castle with siege equipment at (110,140,-10)
+  - Bridge at (123,107,-30)
+
+### 2026-02-09 (Production Deployment)
+
+- **Two-EC2 Architecture Deployment**
+  - EC2 #1 (18.217.111.253): Minecraft server only (Docker)
+  - EC2 #2 (18.222.122.59): Agent runtime + supervisors (pm2)
+  - Private IP communication: 172.31.30.41 (MC) ↔ 172.31.20.245 (Agents)
+  - Auto-restart on boot via pm2 + systemd
+
+- **GitHub Repository**
+  - Pushed to https://github.com/cryptogakusei/agentic-minecraft
+  - Full multi-agent system with 7000+ lines added
+
+- **Agent Personality Updates**
+  - Builder Max: Changed from "silent" to "70% build / 30% communicate"
+  - Created docs/AGENTS.md for personality documentation
+
+- **Message Portal Fix**
+  - Fixed 404 error by updating to fetch from per-agent endpoints
+  - Portal combines messages from all agents
+
+- **Configuration**
+  - SUPERVISOR_AUTOSTART=true for self-healing after restarts
+  - VIEWER_VIEW_DISTANCE_CHUNKS=4 (reduced for stability)
+  - VIEWER_FIRST_PERSON=true (fixes camera issues)
 
 ---
 
@@ -163,42 +187,32 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    Multi-Agent Architecture                              │
+│                    Two-EC2 Production Architecture                       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│   LOCAL (Your Machine)                    AWS (18.217.111.253)          │
-│   ────────────────────                    ────────────────────          │
+│   EC2 #1: Minecraft Server              EC2 #2: Agent Server            │
+│   (18.217.111.253)                      (18.222.122.59)                 │
+│   ─────────────────────                 ─────────────────               │
 │                                                                         │
-│   main-multi.ts                           Docker: minecraft-server      │
-│      │                                         │                        │
-│      ├── AgentCoordinator                      │ Port 25565             │
-│      │      ├── RegionManager                  │                        │
-│      │      └── agents: Map<id, AgentContext>  │                        │
-│      │                                         │                        │
-│      ├── Builder Bob (builder_1)    ◄─────────►│                        │
-│      │      ├── AgentRuntime + Viewer :3001    │                        │
-│      │      ├── BotRunner + Memory             │                        │
-│      │      └── Supervisor (Claude API)        │                        │
-│      │                                         │                        │
-│      ├── Explorer Emma (explorer_1) ◄─────────►│                        │
-│      │      ├── AgentRuntime + Viewer :3002    │                        │
-│      │      ├── BotRunner + Memory             │                        │
-│      │      └── Supervisor (Claude API)        │                        │
-│      │                                         │                        │
-│      ├── Builder Max (builder_2)    ◄─────────►│                        │
-│      │      ├── AgentRuntime + Viewer :3003    │                        │
-│      │      ├── BotRunner + Memory             │                        │
-│      │      └── Supervisor (Claude API)        │                        │
-│      │                                         │                        │
-│      ├── Observer (observer_1)      ◄─────────►│                        │
-│      │      ├── AgentRuntime + Viewer :3004    │                        │
-│      │      └── No Supervisor (manual control) │                        │
-│      │                                         │                        │
-│      └── Fastify Server :8080                                           │
-│             ├── /v1/agents/* endpoints                                  │
-│             ├── /v1/messages endpoint                                   │
-│             ├── /v1/events/stream (SSE)                                 │
-│             └── /messages.html (portal)                                 │
+│   Docker: itzg/minecraft-server         pm2: minecraft-agents           │
+│   └── Paper 1.21.4                      └── node dist/main-multi.js    │
+│       └── Port 25565                        │                           │
+│                                             ├── AgentCoordinator        │
+│             ▲                               │    ├── RegionManager      │
+│             │                               │    └── AgentMessenger     │
+│             │ Private IP                    │                           │
+│             │ 172.31.30.41                  ├── Builder Bob :3001       │
+│             │                               │    └── Supervisor (Claude)│
+│             │                               │                           │
+│             └─────────────────────────────► ├── Explorer Emma :3002     │
+│               TCP/25565                     │    └── Supervisor (Claude)│
+│                                             │                           │
+│                                             ├── (Builder Max :3003)     │
+│                                             │                           │
+│                                             └── REST API :8080          │
+│                                                  ├── /v1/agents/*       │
+│                                                  ├── /v1/messages       │
+│                                                  └── /messages.html     │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -208,36 +222,48 @@
 ## Useful Commands
 
 ```bash
-# Local development (multi-agent)
-pnpm dev:multi              # Start 4 agents locally
+# ===== PRODUCTION (Two-EC2 Setup) =====
 
-# Single agent
-pnpm dev                    # Start single bot with hot reload
+# SSH to servers
+ssh -i multiagent.pem ubuntu@18.217.111.253    # Minecraft server
+ssh -i multiagent.pem ubuntu@18.222.122.59     # Agent server
 
-# AWS server (Minecraft only)
-ssh -i multiagent.pem ubuntu@18.217.111.253
+# Agent server (EC2 #2) - pm2 commands
+pm2 status                                      # Check agent status
+pm2 logs minecraft-agents                       # View logs
+pm2 restart minecraft-agents                    # Restart agents
+pm2 stop minecraft-agents                       # Stop agents
 
-# Docker Minecraft server (on AWS)
+# Minecraft server (EC2 #1) - Docker commands
 sudo docker logs minecraft-server --tail 50
 sudo docker restart minecraft-server
 
-# Multi-Agent API
-curl http://localhost:8080/v1/agents                           # List all agents
-curl -X POST http://localhost:8080/v1/supervisors/start-all    # Start all supervisors
-curl -X POST http://localhost:8080/v1/supervisors/stop-all     # Stop all supervisors
-curl http://localhost:8080/v1/messages?limit=20                # Recent messages
+# Production API (from anywhere)
+curl http://18.222.122.59:8080/v1/agents
+curl http://18.222.122.59:8080/v1/messages?limit=20
+curl -X POST http://18.222.122.59:8080/v1/supervisors/start-all
+curl -X POST http://18.222.122.59:8080/v1/supervisors/stop-all
 
-# Teleport observer
-curl -X POST "http://localhost:8080/v1/agents/observer_1/teleport" \
-  -H "Content-Type: application/json" \
-  -d '{"position": {"x": -45, "y": 80, "z": 0}}'
+# Production Web UIs
+# Message Portal: http://18.222.122.59:8080/messages.html
+# Builder Bob:    http://18.222.122.59:3001
+# Explorer Emma:  http://18.222.122.59:3002
 
-# Web UIs
-# Message Portal: http://localhost:8080/messages.html
-# Builder Bob:    http://localhost:3001
-# Explorer Emma:  http://localhost:3002
-# Builder Max:    http://localhost:3003
-# Observer:       http://localhost:3004
+# ===== LOCAL DEVELOPMENT =====
+
+# Start locally (connects to AWS Minecraft)
+pnpm dev:multi              # Hot reload mode
+pnpm start:multi            # Production mode
+
+# Local API
+curl http://localhost:8080/v1/agents
+
+# Sync code to production
+rsync -avz --exclude node_modules --exclude .git --exclude .data \
+  ~/projects/agentic-minecraft/ ubuntu@18.222.122.59:~/minecraft-agents/
+
+# Deploy after sync
+ssh ubuntu@18.222.122.59 "cd ~/minecraft-agents && pnpm install && pm2 restart minecraft-agents"
 ```
 
 ---
