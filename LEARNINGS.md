@@ -283,7 +283,7 @@ The problem:
 3. **No accountability** - No required outputs to prove compliance
 4. **Suggestions vs commands** - "Use createBlueprint" reads as optional
 
-### Fix Applied
+### Proposed Fix
 
 Restructured prompts with:
 
@@ -315,7 +315,7 @@ PHASE 1: DECIDE (before ANY building)
 - Each phase is 3-4 lines max
 - Commands, not suggestions: "Send a message" not "You should send"
 
-### Why This Works
+### Hypothesis: Why This Should Work
 
 | Verbose Prompt | Structured Prompt |
 |----------------|-------------------|
@@ -325,7 +325,19 @@ PHASE 1: DECIDE (before ANY building)
 | "Should/could" language | Imperative "DO THIS" language |
 | Steps buried in text | Numbered phases with clear gates |
 
-### Key Takeaway
+### Verification Status: ⚠️ PARTIAL
+
+**Observed after deploying structured prompts:**
+- Builder Max sent: "Building: Luxury Villa District at y:175..." (partial compliance)
+- Announcements appeared (some effect)
+- BUT: Agents still chatty, not strictly following 4-phase workflow
+- BUT: No explicit blueprint creation step observed
+- BUT: Agents fitting new instructions into OLD behavioral patterns
+
+**Conclusion:** Structured prompts have SOME effect but are not sufficient alone.
+Further investigation needed - see Learning #6 (pending).
+
+### Key Takeaway (Tentative)
 
 > **LLMs follow structure, not length.** A 50-line prompt with visual hierarchy
 > beats a 20-line paragraph. Make compliance the path of least resistance.
@@ -335,6 +347,9 @@ PHASE 1: DECIDE (before ANY building)
 > - Required outputs at each phase
 > - Scannable rules with symbols (✗/✓)
 > - Imperative voice ("Do X" not "You should X")
+>
+> ⚠️ **Caveat:** Structured prompts alone may not override established behavioral patterns.
+> May need to combine with memory clearing or tool-level enforcement.
 
 ---
 
@@ -381,7 +396,7 @@ The problem:
 - OR conversation context persists in the AI's sliding window
 - The personality feels like config, but it's actually part of conversation history
 
-### Fix Applied
+### Proposed Fix
 
 **Force restart supervisors (not just the application):**
 
@@ -393,11 +408,28 @@ curl -X POST http://server:8080/v1/supervisors/stop-all
 curl -X POST http://server:8080/v1/supervisors/start-all
 ```
 
-This:
-1. Terminates existing AI conversations
-2. Creates fresh conversations
+This should:
+1. Terminate existing AI conversations
+2. Create fresh conversations
 3. New conversations read the UPDATED personality
 4. AI behavior changes immediately
+
+### Verification Status: ⚠️ PARTIAL
+
+**Observed after supervisor restart:**
+- Supervisors successfully stopped and restarted ✅
+- New conversations created ✅
+- Some behavior change: Builder Max started announcing builds ✅
+- BUT: Agents still exhibiting old patterns (verbose chat, portfolio discussions)
+- BUT: Agents have persistent memory files (blueprints.json, scripts.json)
+
+**New Discovery:** Even after supervisor restart, agents have:
+- Persistent data files that carry context between sessions
+- Established "working style" from previous sessions
+- Tendency to fit new instructions INTO existing patterns
+
+**Conclusion:** Supervisor restart helps but is not sufficient alone.
+Persistent memory may need clearing for full personality reset.
 
 ### Prevention Strategies
 
@@ -407,6 +439,7 @@ This:
 | Shorter episode cycles | Faster personality pickup | More API calls, less context |
 | Personality in user message | Can update mid-conversation | Clutters every message |
 | Version check in prompt | Detect stale personality | Complex implementation |
+| Clear persistent memory | Full reset | Loses learned knowledge |
 
 ### Key Takeaway
 
@@ -415,6 +448,9 @@ This:
 > In long-running AI agents, the system prompt is read ONCE at conversation start.
 > Personality changes require ending and restarting the conversation, not just
 > the application process. Design your system with a "reload personality" mechanism.
+>
+> ⚠️ **Caveat:** Even with conversation restart, persistent memory (files, blueprints)
+> can carry behavioral patterns forward. Full reset may require memory clearing.
 
 ---
 
