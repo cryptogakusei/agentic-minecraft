@@ -4,6 +4,25 @@ Lessons learned from building autonomous AI agents in Minecraft.
 
 ---
 
+## What Belongs Here
+
+✅ **Add learnings about:**
+- LLM behavioral patterns (hallucination, goal drift, confirmation bias)
+- Multi-agent coordination failures (communication, synchronization, conflicts)
+- AI trust/verification issues (when to trust AI claims vs verify ground truth)
+- Emergent behaviors (unexpected agent interactions, feedback loops)
+- Prompt engineering failures (instructions that don't constrain as expected)
+
+❌ **Don't add:**
+- General software bugs (null checks, async handling, type errors)
+- Infrastructure issues (deployment, networking, scaling)
+- API/library quirks (unless they cause AI-specific behavior)
+
+**Rule of thumb:** Would this lesson transfer to a different AI agent project?
+If yes → add it here. If no → document in WORKLOG.md or code comments.
+
+---
+
 ## Learning #1: Phantom Builds - AI Hallucinating Completed Work
 
 **Date:** 2026-02-09
