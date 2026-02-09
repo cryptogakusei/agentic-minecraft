@@ -1,0 +1,90 @@
+# PaperMC Global Configuration for Bot-Friendly Server
+# =======================================================
+# This configuration relaxes spam protection to allow mineflayer bots
+# to operate without getting kicked for "Kicked for spamming".
+#
+# Copy this file to your PaperMC server's config/ directory.
+# The server will merge these settings on startup.
+#
+# WARNING: These settings reduce spam protection. Only use on servers
+# where you trust all connected clients (e.g., private bot testing servers).
+
+_version: 29
+
+# Packet limiter - controls how many packets clients can send
+# Default: 500 packets per 7 seconds (71/sec) - too low for bots
+# Bots send: ~20 physics packets/sec + pathfinding + commands
+packet-limiter:
+  # Global limit for all packet types
+  # Bots can easily hit 100+ packets/sec during pathfinding
+  all-packets:
+    action: KICK
+    interval: 7.0
+    # Increased from 500 to 2000 to accommodate bot traffic
+    # This allows ~285 packets/sec which should be plenty
+    max-packet-rate: 2000.0
+
+  # Per-packet-type overrides
+  overrides:
+    # Recipe packets are expensive - keep limited
+    ServerboundPlaceRecipePacket:
+      action: DROP
+      interval: 4.0
+      max-packet-rate: 5.0
+
+    # Movement packets - bots send many during pathfinding
+    # DROP instead of KICK to be forgiving during heavy pathfinding
+    ServerboundMovePlayerPacket:
+      action: DROP
+      interval: 1.0
+      max-packet-rate: 100.0
+
+    ServerboundMovePlayerPacketPos:
+      action: DROP
+      interval: 1.0
+      max-packet-rate: 100.0
+
+    ServerboundMovePlayerPacketPosRot:
+      action: DROP
+      interval: 1.0
+      max-packet-rate: 100.0
+
+    ServerboundMovePlayerPacketRot:
+      action: DROP
+      interval: 1.0
+      max-packet-rate: 100.0
+
+# Spam limiter - controls chat/command spam
+spam-limiter:
+  # Tab completion spam (not relevant for bots)
+  tab-spam-increment: 1
+  tab-spam-limit: 500
+
+  # Recipe spam
+  recipe-spam-increment: 1
+  recipe-spam-limit: 20
+
+# Incoming packet threshold - only affects USE_ITEM packets
+# Increased to prevent kicks during rapid block placement
+incoming-packet-threshold: 5000
+
+# Player settings
+player-auto-save:
+  max-per-tick: -1
+  rate: 6000
+
+# Chunk loading - bots need fast chunk loading
+chunk-loading-basic:
+  player-max-chunk-load-rate: -1.0
+  player-max-concurrent-chunk-generates: 0
+  player-max-concurrent-chunk-loads: 0
+
+# Misc settings
+misc:
+  # Allow bots to use chunk loading commands
+  max-joins-per-tick: 10
+
+# Watchdog - increase timeout for slower operations
+watchdog:
+  early-warning-delay: 10000
+  early-warning-every: 5000

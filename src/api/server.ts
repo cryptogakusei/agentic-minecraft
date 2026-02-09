@@ -12,6 +12,7 @@ import { JsonlEventStore } from '../events/jsonl-event-store.js';
 import { AgentRuntime } from '../runtime/agent-runtime.js';
 import { Supervisor } from '../supervisor/supervisor.js';
 import { BotRunner } from '../bot-runner.js';
+import type { AgentCoordinator } from '../coordinator/agent-coordinator.js';
 import {
   compileBlueprintSchema,
   createBlueprintSchema,
@@ -34,9 +35,10 @@ export type AppContext = {
   config: AppConfig;
   events: EventBus<AppEvents>;
   eventStore: JsonlEventStore<AppEvents>;
-  agent: AgentRuntime;
-  supervisor: Supervisor;
-  botRunner: BotRunner;
+  agent?: AgentRuntime;
+  supervisor?: Supervisor;
+  botRunner?: BotRunner;
+  coordinator?: AgentCoordinator;
 };
 
 export async function buildServer(ctx: AppContext) {
@@ -631,6 +633,123 @@ export async function buildServer(ctx: AppContext) {
     return reply.send({ jobId: job.jobId });
   });
 
+  // === Multi-Agent Routes (only active when coordinator is provided) ===
+
+  if (ctx.coordinator) {
+    const coordinator = ctx.coordinator;
+
+    app.get('/v1/agents', async () => {
+      return { agents: coordinator.getAgentsSummary() };
+    });
+
+    app.get('/v1/agents/:agentId', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      const agent = coordinator.getAgent(agentId);
+      if (!agent) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Agent not found' } });
+
+      const status = agent.botRunner.getStatus();
+      return {
+        agentId: agent.agentId,
+        personality: agent.personality,
+        connected: agent.runtime.isConnected(),
+        supervisorRunning: agent.supervisor.isRunning(),
+        bot: status.bot,
+        budgets: status.budgets,
+        viewerPort: agent.config.viewerPort,
+      };
+    });
+
+    app.post('/v1/agents/:agentId/connect', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      try {
+        await coordinator.connectAgent(agentId);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: (err as Error).message } });
+      }
+    });
+
+    app.post('/v1/agents/:agentId/disconnect', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      try {
+        await coordinator.disconnectAgent(agentId);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: (err as Error).message } });
+      }
+    });
+
+    app.post('/v1/agents/:agentId/supervisor/start', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      try {
+        coordinator.startSupervisor(agentId);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: (err as Error).message } });
+      }
+    });
+
+    app.post('/v1/agents/:agentId/supervisor/stop', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      try {
+        coordinator.stopSupervisor(agentId);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: (err as Error).message } });
+      }
+    });
+
+    app.post('/v1/agents/:agentId/teleport', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      const agent = coordinator.getAgent(agentId);
+      if (!agent) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Agent not found' } });
+
+      const parsed = parseBody(teleportSchema, req.body);
+      await agent.botRunner.teleport(parsed.position, parsed.yaw, parsed.pitch);
+      return { ok: true };
+    });
+
+    app.post('/v1/agents/:agentId/message', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      const parsed = parseBody(
+        z.object({
+          to: z.string().min(1),
+          content: z.string().min(1).max(500),
+        }),
+        req.body,
+      );
+      try {
+        coordinator.sendMessage(agentId, parsed.to, parsed.content);
+        return { ok: true };
+      } catch (err) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: (err as Error).message } });
+      }
+    });
+
+    app.get('/v1/agents/:agentId/messages', async (req, reply) => {
+      const { agentId } = req.params as { agentId: string };
+      const agent = coordinator.getAgent(agentId);
+      if (!agent) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Agent not found' } });
+
+      const messages = agent.messenger.getAllMessages();
+      return { messages };
+    });
+
+    app.get('/v1/regions', async () => {
+      return { regions: coordinator.regionManager.getAllClaims() };
+    });
+
+    app.post('/v1/supervisors/start-all', async () => {
+      coordinator.startAllSupervisors();
+      return { ok: true };
+    });
+
+    app.post('/v1/supervisors/stop-all', async () => {
+      coordinator.stopAllSupervisors();
+      return { ok: true };
+    });
+  }
+
   app.get('/v1/events/stream', async (req, reply) => {
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -664,11 +783,28 @@ export async function buildServer(ctx: AppContext) {
   });
 
   app.get('/v1/events', async (req, reply) => {
-    const query = req.query as { sinceSeq?: string; limit?: string };
+    const query = req.query as { sinceSeq?: string; limit?: string; type?: string };
     const sinceSeq = query.sinceSeq ? Number(query.sinceSeq) : 0;
     const limit = query.limit ? Number(query.limit) : 500;
-    const events = await ctx.eventStore.readSince(Number.isFinite(sinceSeq) ? sinceSeq : 0, Number.isFinite(limit) ? limit : 500);
+    // Support comma-separated types for filtering (e.g., type=agent.message,agent.broadcast)
+    const types = query.type ? query.type.split(',').map(t => t.trim()).filter(Boolean) : undefined;
+    const events = await ctx.eventStore.readSince(
+      Number.isFinite(sinceSeq) ? sinceSeq : 0,
+      Number.isFinite(limit) ? limit : 500,
+      types,
+    );
     return reply.send({ events });
+  });
+
+  // Dedicated endpoint for agent messages - reads recent messages from the end of the log
+  app.get('/v1/messages', async (req, reply) => {
+    const query = req.query as { limit?: string };
+    const limit = query.limit ? Number(query.limit) : 100;
+    const events = await ctx.eventStore.readRecent(
+      Number.isFinite(limit) ? limit : 100,
+      ['agent.message', 'agent.broadcast'],
+    );
+    return reply.send({ messages: events });
   });
 
   return app;

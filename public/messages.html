@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Command Center - Multi-Agent Minecraft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <style>
+    /* CSS Reset */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Custom Properties - Premium Design System */
+    :root {
+      /* Background layers with depth */
+      --bg-base: #05070a;
+      --bg-primary: #0a0e14;
+      --bg-secondary: #0f1419;
+      --bg-tertiary: #151b23;
+      --bg-elevated: #1a2029;
+      --bg-elevated-hover: #1f252f;
+
+      /* Text hierarchy */
+      --text-primary: #f0f3f7;
+      --text-secondary: #a8b2c1;
+      --text-tertiary: #6e7887;
+      --text-quaternary: #4a5260;
+
+      /* Borders with subtle luminosity */
+      --border-subtle: rgba(255, 255, 255, 0.04);
+      --border-medium: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
+
+      /* Agent role colors - enhanced with gradients */
+      --builder-primary: #e8b870;
+      --builder-secondary: #c9965f;
+      --builder-glow: rgba(232, 184, 112, 0.4);
+      --builder-bg: linear-gradient(135deg, rgba(232, 184, 112, 0.08) 0%, rgba(201, 150, 95, 0.04) 100%);
+      --builder-border: rgba(232, 184, 112, 0.2);
+
+      --explorer-primary: #7dd4a3;
+      --explorer-secondary: #6eb88f;
+      --explorer-glow: rgba(125, 212, 163, 0.4);
+      --explorer-bg: linear-gradient(135deg, rgba(125, 212, 163, 0.08) 0%, rgba(110, 184, 143, 0.04) 100%);
+      --explorer-border: rgba(125, 212, 163, 0.2);
+
+      --decorator-primary: #c9a8e8;
+      --decorator-secondary: #b88fd9;
+      --decorator-glow: rgba(201, 168, 232, 0.4);
+      --decorator-bg: linear-gradient(135deg, rgba(201, 168, 232, 0.08) 0%, rgba(184, 143, 217, 0.04) 100%);
+      --decorator-border: rgba(201, 168, 232, 0.2);
+
+      --broadcast-primary: #91c5f2;
+      --broadcast-secondary: #7ea9d9;
+      --broadcast-glow: rgba(145, 197, 242, 0.4);
+      --broadcast-bg: linear-gradient(135deg, rgba(145, 197, 242, 0.08) 0%, rgba(126, 169, 217, 0.04) 100%);
+      --broadcast-border: rgba(145, 197, 242, 0.2);
+
+      /* Status colors with enhanced vibrancy */
+      --status-online: #7dd4a3;
+      --status-online-glow: rgba(125, 212, 163, 0.5);
+      --status-offline: #5a5f6b;
+      --status-connecting: #e8b870;
+      --status-connecting-glow: rgba(232, 184, 112, 0.5);
+
+      /* Spacing scale (4px base) */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+      --space-2xl: 48px;
+      --space-3xl: 64px;
+      --space-4xl: 80px;
+
+      /* Fluid typography scale using clamp */
+      --font-xs: clamp(0.688rem, 0.65rem + 0.19vw, 0.75rem);
+      --font-sm: clamp(0.813rem, 0.77rem + 0.21vw, 0.875rem);
+      --font-base: clamp(0.938rem, 0.88rem + 0.29vw, 1rem);
+      --font-lg: clamp(1.063rem, 0.99rem + 0.36vw, 1.25rem);
+      --font-xl: clamp(1.25rem, 1.14rem + 0.55vw, 1.5rem);
+      --font-2xl: clamp(1.5rem, 1.34rem + 0.8vw, 1.875rem);
+      --font-3xl: clamp(2rem, 1.71rem + 1.45vw, 2.625rem);
+      --font-4xl: clamp(2.5rem, 2.07rem + 2.15vw, 3.5rem);
+
+      /* Line heights */
+      --leading-tight: 1.2;
+      --leading-snug: 1.375;
+      --leading-normal: 1.5;
+      --leading-relaxed: 1.625;
+      --leading-loose: 1.75;
+
+      /* Letter spacing for optical refinement */
+      --tracking-tighter: -0.04em;
+      --tracking-tight: -0.02em;
+      --tracking-normal: 0;
+      --tracking-wide: 0.025em;
+      --tracking-wider: 0.05em;
+
+      /* Border radius scale */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-2xl: 28px;
+      --radius-full: 9999px;
+
+      /* Elevation system - shadows with colored tints */
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.25);
+      --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.4), 0 8px 16px rgba(0, 0, 0, 0.3);
+
+      /* Transitions with custom easing */
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-bounce: 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+      /* Backdrop blur for glassmorphism */
+      --blur-sm: blur(8px);
+      --blur-md: blur(16px);
+      --blur-lg: blur(24px);
+    }
+
+    /* Base Styles */
+    html {
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: var(--space-lg) var(--space-md);
+      font-size: var(--font-base);
+      line-height: var(--leading-normal);
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background gradient effect */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 20% 20%, rgba(125, 212, 163, 0.05) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 80%, rgba(232, 184, 112, 0.05) 0%, transparent 50%);
+      animation: ambientShift 20s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes ambientShift {
+      0%, 100% {
+        transform: translate(0, 0);
+      }
+      50% {
+        transform: translate(-2%, -2%);
+      }
+    }
+
+    @media (min-width: 768px) {
+      body {
+        padding: var(--space-2xl) var(--space-lg);
+      }
+    }
+
+    /* Container */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header with gradient text effect */
+    .header {
+      margin-bottom: var(--space-3xl);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: var(--font-4xl);
+      font-weight: 700;
+      letter-spacing: var(--tracking-tighter);
+      line-height: var(--leading-tight);
+      margin-bottom: var(--space-sm);
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .subtitle {
+      color: var(--text-tertiary);
+      font-size: var(--font-sm);
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      font-weight: 600;
+      animation: fadeIn 0.8s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* Enhanced Status Badge with glow */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-lg);
+      border-radius: var(--radius-full);
+      font-size: var(--font-sm);
+      font-weight: 600;
+      letter-spacing: var(--tracking-wide);
+      margin: var(--space-xl) auto var(--space-2xl);
+      width: fit-content;
+      position: relative;
+      backdrop-filter: var(--blur-md);
+      transition: all var(--transition-base);
+      animation: fadeInScale 0.6s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .status::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: statusPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      position: relative;
+      z-index: 2;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.6;
+        transform: scale(0.85);
+      }
+    }
+
+    .status::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: var(--radius-full);
+      padding: 2px;
+      background: linear-gradient(135deg, var(--border-strong), var(--border-subtle));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      z-index: 1;
+    }
+
+    .status.connected {
+      background: linear-gradient(135deg, rgba(125, 212, 163, 0.15) 0%, rgba(125, 212, 163, 0.08) 100%);
+      color: var(--status-online);
+      box-shadow: 0 4px 16px rgba(125, 212, 163, 0.15), 0 0 0 1px rgba(125, 212, 163, 0.3);
+    }
+
+    .status.connected::before {
+      background: var(--status-online);
+      box-shadow: 0 0 12px var(--status-online-glow), 0 0 4px var(--status-online);
+    }
+
+    .status.disconnected {
+      background: linear-gradient(135deg, rgba(232, 184, 112, 0.15) 0%, rgba(232, 184, 112, 0.08) 100%);
+      color: var(--status-connecting);
+      box-shadow: 0 4px 16px rgba(232, 184, 112, 0.15), 0 0 0 1px rgba(232, 184, 112, 0.3);
+    }
+
+    .status.disconnected::before {
+      background: var(--status-connecting);
+      box-shadow: 0 0 12px var(--status-connecting-glow), 0 0 4px var(--status-connecting);
+    }
+
+    /* Premium Agents Bar with enhanced cards */
+    .agents-bar {
+      display: flex;
+      gap: var(--space-md);
+      justify-content: center;
+      margin-bottom: var(--space-2xl);
+      flex-wrap: wrap;
+      animation: fadeInUp 0.8s 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .agent-badge {
+      padding: var(--space-md) var(--space-lg);
+      border-radius: var(--radius-lg);
+      font-size: var(--font-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      font-weight: 600;
+      letter-spacing: var(--tracking-tight);
+      transition: all var(--transition-base);
+      position: relative;
+      cursor: default;
+      backdrop-filter: var(--blur-sm);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .agent-badge::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-lg);
+      padding: 1px;
+      background: linear-gradient(135deg, var(--border-medium), transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0.8;
+      transition: opacity var(--transition-base);
+    }
+
+    .agent-badge:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .agent-badge:hover::before {
+      opacity: 1;
+    }
+
+    .agent-badge.builder {
+      background: var(--builder-bg);
+      color: var(--builder-primary);
+    }
+
+    .agent-badge.builder:hover {
+      box-shadow: 0 8px 20px rgba(232, 184, 112, 0.2), var(--shadow-md);
+    }
+
+    .agent-badge.explorer {
+      background: var(--explorer-bg);
+      color: var(--explorer-primary);
+    }
+
+    .agent-badge.explorer:hover {
+      box-shadow: 0 8px 20px rgba(125, 212, 163, 0.2), var(--shadow-md);
+    }
+
+    .agent-badge.decorator {
+      background: var(--decorator-bg);
+      color: var(--decorator-primary);
+    }
+
+    .agent-badge.decorator:hover {
+      box-shadow: 0 8px 20px rgba(201, 168, 232, 0.2), var(--shadow-md);
+    }
+
+    .agent-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      transition: all var(--transition-base);
+      position: relative;
+    }
+
+    .agent-badge .dot::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: inherit;
+      filter: blur(4px);
+      opacity: 0.4;
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% {
+        opacity: 0.4;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.8;
+        transform: scale(1.2);
+      }
+    }
+
+    .agent-badge.builder .dot {
+      background: var(--builder-primary);
+      box-shadow: 0 0 8px var(--builder-glow);
+    }
+
+    .agent-badge.explorer .dot {
+      background: var(--explorer-primary);
+      box-shadow: 0 0 8px var(--explorer-glow);
+    }
+
+    .agent-badge.decorator .dot {
+      background: var(--decorator-primary);
+      box-shadow: 0 0 8px var(--decorator-glow);
+    }
+
+    .agent-badge .dot.offline {
+      background: var(--status-offline);
+      box-shadow: none;
+      opacity: 0.4;
+    }
+
+    .agent-badge .dot.offline::after {
+      display: none;
+    }
+
+    /* Premium Messages Container with glassmorphism */
+    .messages {
+      background: linear-gradient(135deg, rgba(15, 20, 25, 0.6) 0%, rgba(10, 14, 20, 0.8) 100%);
+      backdrop-filter: var(--blur-lg);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-xl);
+      padding: var(--space-xl);
+      min-height: 500px;
+      max-height: 65vh;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      position: relative;
+      animation: fadeInScale 0.8s 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .messages::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    }
+
+    .messages::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .messages::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: var(--radius-full);
+      margin: var(--space-md) 0;
+    }
+
+    .messages::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--border-strong) 0%, var(--border-medium) 100%);
+      border-radius: var(--radius-full);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+      transition: background var(--transition-base);
+    }
+
+    .messages::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.15) 100%);
+      background-clip: padding-box;
+    }
+
+    /* Enhanced Message Cards with sophisticated hover effects */
+    .message {
+      margin-bottom: var(--space-lg);
+      padding: var(--space-lg);
+      border-radius: var(--radius-lg);
+      border: 1px solid transparent;
+      position: relative;
+      animation: messageSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all var(--transition-base);
+      backdrop-filter: var(--blur-sm);
+    }
+
+    .message:hover {
+      border-color: var(--border-medium);
+      transform: translateX(4px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .message:last-child {
+      margin-bottom: 0;
+    }
+
+    @keyframes messageSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Enhanced left border accent with glow */
+    .message::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: var(--radius-full);
+      opacity: 0.8;
+      transition: all var(--transition-base);
+    }
+
+    .message:hover::before {
+      opacity: 1;
+      width: 4px;
+      filter: drop-shadow(0 0 4px currentColor);
+    }
+
+    /* Subtle inner glow effect on hover */
+    .message::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+      opacity: 0;
+      transition: opacity var(--transition-base);
+      pointer-events: none;
+    }
+
+    .message:hover::after {
+      opacity: 1;
+    }
+
+    .message.builder {
+      background: var(--builder-bg);
+    }
+
+    .message.builder::before {
+      background: linear-gradient(180deg, var(--builder-primary) 0%, var(--builder-secondary) 100%);
+      box-shadow: 0 0 8px var(--builder-glow);
+    }
+
+    .message.explorer {
+      background: var(--explorer-bg);
+    }
+
+    .message.explorer::before {
+      background: linear-gradient(180deg, var(--explorer-primary) 0%, var(--explorer-secondary) 100%);
+      box-shadow: 0 0 8px var(--explorer-glow);
+    }
+
+    .message.decorator {
+      background: var(--decorator-bg);
+    }
+
+    .message.decorator::before {
+      background: linear-gradient(180deg, var(--decorator-primary) 0%, var(--decorator-secondary) 100%);
+      box-shadow: 0 0 8px var(--decorator-glow);
+    }
+
+    .message.broadcast {
+      background: var(--broadcast-bg);
+    }
+
+    .message.broadcast::before {
+      background: linear-gradient(180deg, var(--broadcast-primary) 0%, var(--broadcast-secondary) 100%);
+      box-shadow: 0 0 8px var(--broadcast-glow);
+    }
+
+    /* Message Header */
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: var(--space-md);
+      gap: var(--space-md);
+      flex-wrap: wrap;
+    }
+
+    .message-meta {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-sm);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .message-from {
+      font-weight: 700;
+      font-size: var(--font-sm);
+      letter-spacing: var(--tracking-tight);
+      white-space: nowrap;
+      transition: color var(--transition-fast);
+    }
+
+    .message:hover .message-from {
+      filter: brightness(1.2);
+    }
+
+    .message.builder .message-from {
+      color: var(--builder-primary);
+    }
+
+    .message.explorer .message-from {
+      color: var(--explorer-primary);
+    }
+
+    .message.decorator .message-from {
+      color: var(--decorator-primary);
+    }
+
+    .message.broadcast .message-from {
+      color: var(--broadcast-primary);
+    }
+
+    .message-arrow {
+      color: var(--text-quaternary);
+      font-size: var(--font-xs);
+      flex-shrink: 0;
+      opacity: 0.6;
+      transition: all var(--transition-base);
+    }
+
+    .message:hover .message-arrow {
+      opacity: 1;
+      transform: translateX(2px);
+    }
+
+    .message-to {
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    .message-time {
+      color: var(--text-tertiary);
+      font-size: var(--font-xs);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      letter-spacing: var(--tracking-wide);
+      font-weight: 500;
+      opacity: 0.7;
+      transition: opacity var(--transition-fast);
+    }
+
+    .message:hover .message-time {
+      opacity: 1;
+    }
+
+    /* Message Content with enhanced readability */
+    .message-content {
+      color: var(--text-primary);
+      line-height: var(--leading-relaxed);
+      font-size: var(--font-base);
+      word-wrap: break-word;
+      padding-left: var(--space-sm);
+      opacity: 0.95;
+      transition: opacity var(--transition-fast);
+    }
+
+    .message:hover .message-content {
+      opacity: 1;
+    }
+
+    /* Enhanced Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4xl) var(--space-lg);
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+
+    .empty-state-icon {
+      width: 56px;
+      height: 56px;
+      margin-bottom: var(--space-lg);
+      opacity: 0.25;
+      stroke: currentColor;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+
+    .empty-state-text {
+      font-size: var(--font-sm);
+      letter-spacing: var(--tracking-wide);
+      font-weight: 500;
+    }
+
+    /* Premium Stats with animated counters and gradients */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-xl);
+      margin-top: var(--space-2xl);
+      animation: fadeInUp 0.8s 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .stat {
+      text-align: center;
+      padding: var(--space-xl) var(--space-2xl);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, rgba(26, 32, 41, 0.6) 0%, rgba(15, 20, 25, 0.8) 100%);
+      backdrop-filter: var(--blur-md);
+      border: 1px solid var(--border-medium);
+      min-width: 140px;
+      transition: all var(--transition-base);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+      opacity: 0;
+      transition: opacity var(--transition-base);
+    }
+
+    .stat:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .stat:hover::before {
+      opacity: 1;
+    }
+
+    .stat-value {
+      font-size: var(--font-3xl);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: var(--tracking-tighter);
+      line-height: var(--leading-tight);
+      margin-bottom: var(--space-sm);
+      font-variant-numeric: tabular-nums;
+      transition: transform var(--transition-bounce);
+    }
+
+    .stat:hover .stat-value {
+      transform: scale(1.05);
+    }
+
+    .stat-label {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wider);
+      font-weight: 600;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .messages {
+        padding: var(--space-lg);
+        max-height: 60vh;
+      }
+
+      .message {
+        padding: var(--space-md);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .message-header {
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+
+      .stats {
+        gap: var(--space-md);
+        flex-wrap: wrap;
+      }
+
+      .stat {
+        min-width: 120px;
+        padding: var(--space-lg) var(--space-xl);
+      }
+
+      .stat-value {
+        font-size: var(--font-2xl);
+      }
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      :root {
+        --border-subtle: rgba(255, 255, 255, 0.15);
+        --border-medium: rgba(255, 255, 255, 0.25);
+        --border-strong: rgba(255, 255, 255, 0.35);
+      }
+    }
+
+    /* Reduced motion support - disable animations */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+
+      body::before {
+        animation: none;
+      }
+
+      .empty-state-icon {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Agent Command Center</h1>
+      <p class="subtitle">Multi-Agent Minecraft Intelligence Portal</p>
+    </header>
+
+    <div id="status" class="status disconnected">Connecting</div>
+
+    <div id="agents-bar" class="agents-bar"></div>
+
+    <div id="messages" class="messages">
+      <div class="empty-state">
+        <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <p class="empty-state-text">Waiting for agent communications</p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="msg-count">0</div>
+        <div class="stat-label">Messages</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="agent-count">0</div>
+        <div class="stat-label">Active Agents</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const statusEl = document.getElementById('status');
+    const agentsBarEl = document.getElementById('agents-bar');
+    const msgCountEl = document.getElementById('msg-count');
+    const agentCountEl = document.getElementById('agent-count');
+
+    let messageCount = 0;
+    let agents = {};
+    let hasMessages = false;
+
+    const agentColors = {
+      builder: 'builder',
+      explorer: 'explorer',
+      decorator: 'decorator',
+    };
+
+    function getAgentClass(agentId) {
+      for (const [role, cls] of Object.entries(agentColors)) {
+        if (agentId.includes(role)) return cls;
+      }
+      return 'builder';
+    }
+
+    function formatTime(ts) {
+      const date = new Date(ts);
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    }
+
+    // Animated counter for stats
+    function animateCounter(element, targetValue, duration = 800) {
+      const startValue = parseInt(element.textContent) || 0;
+      const startTime = performance.now();
+
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Ease out cubic function for smooth deceleration
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        const currentValue = Math.floor(startValue + (targetValue - startValue) * easeOutCubic);
+
+        element.textContent = currentValue;
+
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        } else {
+          element.textContent = targetValue;
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    function addMessage(data) {
+      if (!hasMessages) {
+        messagesEl.innerHTML = '';
+        hasMessages = true;
+      }
+
+      const msgClass = data.to === '*' ? 'broadcast' : getAgentClass(data.from);
+      const toText = data.to === '*' ? 'Everyone (broadcast)' : data.to;
+
+      const msgEl = document.createElement('div');
+      msgEl.className = `message ${msgClass}`;
+      msgEl.innerHTML = `
+        <div class="message-header">
+          <div class="message-meta">
+            <span class="message-from">${escapeHtml(data.from)}</span>
+            <span class="message-arrow">→</span>
+            <span class="message-to">${escapeHtml(toText)}</span>
+          </div>
+          <span class="message-time">${formatTime(data.ts)}</span>
+        </div>
+        <div class="message-content">${escapeHtml(data.content)}</div>
+      `;
+
+      messagesEl.appendChild(msgEl);
+
+      // Smooth scroll to bottom
+      requestAnimationFrame(() => {
+        messagesEl.scrollTo({
+          top: messagesEl.scrollHeight,
+          behavior: 'smooth'
+        });
+      });
+
+      messageCount++;
+      animateCounter(msgCountEl, messageCount);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function updateAgents(agentList) {
+      agents = {};
+      agentList.forEach(a => agents[a.agentId] = a);
+
+      agentsBarEl.innerHTML = agentList.map(a => `
+        <div class="agent-badge ${getAgentClass(a.agentId)}">
+          <span class="dot ${a.connected ? '' : 'offline'}"></span>
+          ${escapeHtml(a.name)} (${escapeHtml(a.role)})
+        </div>
+      `).join('');
+
+      animateCounter(agentCountEl, agentList.length);
+    }
+
+    // Fetch initial agents
+    fetch('/v1/agents')
+      .then(r => r.json())
+      .then(data => updateAgents(data.agents || []))
+      .catch(() => {});
+
+    // Fetch recent messages from dedicated messages endpoint
+    fetch('/v1/messages?limit=100')
+      .then(r => r.json())
+      .then(data => {
+        const messages = (data.messages || []).map(e => ({
+          ...e.data,
+          to: e.type === 'agent.broadcast' ? '*' : e.data.to,
+        }));
+        messages.forEach(addMessage);
+      })
+      .catch(() => {});
+
+    // Connect to SSE stream
+    function connect() {
+      const evtSource = new EventSource('/v1/events/stream');
+
+      evtSource.onopen = () => {
+        statusEl.textContent = 'Live';
+        statusEl.className = 'status connected';
+      };
+
+      evtSource.onerror = () => {
+        statusEl.textContent = 'Reconnecting';
+        statusEl.className = 'status disconnected';
+      };
+
+      evtSource.addEventListener('agent.message', (e) => {
+        const data = JSON.parse(e.data);
+        addMessage(data.data);
+      });
+
+      evtSource.addEventListener('agent.broadcast', (e) => {
+        const data = JSON.parse(e.data);
+        addMessage({ ...data.data, to: '*' });
+      });
+
+      evtSource.addEventListener('agent.created', () => {
+        fetch('/v1/agents')
+          .then(r => r.json())
+          .then(data => updateAgents(data.agents || []))
+          .catch(() => {});
+      });
+    }
+
+    connect();
+
+    // Refresh agents periodically
+    setInterval(() => {
+      fetch('/v1/agents')
+        .then(r => r.json())
+        .then(data => updateAgents(data.agents || []))
+        .catch(() => {});
+    }, 10000);
+  </script>
+</body>
+</html>

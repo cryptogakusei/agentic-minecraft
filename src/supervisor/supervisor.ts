@@ -10,6 +10,8 @@ import { BotRunner } from '../bot-runner.js';
 import { JsonStore } from '../store/json-store.js';
 import { blueprintOpSchema, vec3Schema } from '../lib/schemas.js';
 import { buildPromptPack } from './prompt-pack.js';
+import { AgentPersonality } from '../types/agent-config.js';
+import type { AgentCoordinator } from '../coordinator/agent-coordinator.js';
 
 type SupervisorState = {
   mode: SupervisorMode;
@@ -38,6 +40,10 @@ const MODE_TRANSITIONS: Record<SupervisorMode, SupervisorMode> = {
   plan: 'build',
 };
 
+// How often to remind the agent to check messages (in milliseconds)
+// Set to 5 minutes to avoid interrupting builders too frequently
+const MESSAGE_CHECK_INTERVAL_MS = 300_000; // 5 minutes
+
 export class Supervisor {
   private running = false;
   private mode: SupervisorMode = 'explore';
@@ -46,14 +52,24 @@ export class Supervisor {
   private consecutiveFailures = 0;
   private abortController: AbortController | null = null;
   private readonly stateStore: JsonStore<SupervisorState>;
+  readonly agentId: string;
+  private lastMessageCheckTime: number = Date.now();
+  private messageCheckReminded: boolean = false;
 
   constructor(
     private readonly config: AppConfig,
     private readonly events: EventBus<AppEvents>,
     private readonly botRunner: BotRunner,
+    agentId?: string,
+    private readonly personality?: AgentPersonality,
+    private readonly coordinator?: AgentCoordinator,
   ) {
+    this.agentId = agentId ?? 'default';
+    const dataDir = dirname(config.EVENTS_JSONL_PATH);
+    const stateDir = agentId ? join(dataDir, 'agents', agentId) : dataDir;
+
     this.stateStore = new JsonStore<SupervisorState>(
-      join(dirname(config.EVENTS_JSONL_PATH), 'supervisor-state.json'),
+      join(stateDir, 'supervisor-state.json'),
       { mode: 'explore', nextObjective: null },
     );
   }
@@ -104,8 +120,10 @@ export class Supervisor {
     this.consecutiveFailures = 0;
     this.events.publish('supervisor.start', { autostart: this.config.SUPERVISOR_AUTOSTART });
 
-    if (!this.config.AI_GATEWAY_API_KEY) {
-      this.stop('AI_GATEWAY_API_KEY is not set');
+    const hasAnthropicKey = this.config.SUPERVISOR_PROVIDER === 'anthropic' && this.config.ANTHROPIC_API_KEY;
+    const hasGatewayKey = this.config.AI_GATEWAY_API_KEY;
+    if (!hasAnthropicKey && !hasGatewayKey) {
+      this.stop('No API key configured (set ANTHROPIC_API_KEY or AI_GATEWAY_API_KEY)');
       return;
     }
 
@@ -643,6 +661,130 @@ export class Supervisor {
       }),
     };
 
+    // === Inter-Agent Coordination Tools (Multi-Agent) ===
+    const multiAgentTools = this.coordinator ? {
+      sendMessage: tool({
+        description: 'Send a message to another agent. Use to coordinate, share findings, request help, or delegate tasks.',
+        inputSchema: z.object({
+          to: z.string().describe('Target agent ID'),
+          message: z.string().min(1).max(500).describe('Message content'),
+        }),
+        execute: async ({ to, message }) => {
+          // Reset message check timer - sending is active communication
+          this.lastMessageCheckTime = Date.now();
+          this.messageCheckReminded = false;
+
+          const agent = this.coordinator!.getAgent(this.agentId);
+          if (!agent) return { error: 'Agent not found' };
+          agent.messenger.send(to, message);
+          return { sent: true, to };
+        },
+      }),
+
+      broadcastMessage: tool({
+        description: 'Broadcast a message to all other agents. Use for announcements or general coordination.',
+        inputSchema: z.object({
+          message: z.string().min(1).max(500).describe('Message content'),
+        }),
+        execute: async ({ message }) => {
+          // Reset message check timer - broadcasting is active communication
+          this.lastMessageCheckTime = Date.now();
+          this.messageCheckReminded = false;
+
+          const agent = this.coordinator!.getAgent(this.agentId);
+          if (!agent) return { error: 'Agent not found' };
+          agent.messenger.broadcast(message);
+          return { broadcast: true };
+        },
+      }),
+
+      getMessages: tool({
+        description: 'Check messages from other agents. Call periodically to stay coordinated.',
+        inputSchema: z.object({
+          unreadOnly: z.boolean().optional().describe('Only return unread messages'),
+        }),
+        execute: async ({ unreadOnly }) => {
+          // Reset the message check timer
+          this.lastMessageCheckTime = Date.now();
+          this.messageCheckReminded = false;
+
+          const agent = this.coordinator!.getAgent(this.agentId);
+          if (!agent) return { error: 'Agent not found' };
+          const messages = unreadOnly
+            ? agent.messenger.getUnreadMessages()
+            : agent.messenger.getRecentMessages(20);
+          agent.messenger.markAllRead();
+          return { messages, count: messages.length };
+        },
+      }),
+
+      claimRegion: tool({
+        description: 'Claim a region for building. Other agents cannot claim overlapping regions. Always claim before building to avoid conflicts.',
+        inputSchema: z.object({
+          bbox: z.object({
+            min: z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }),
+            max: z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }),
+          }),
+          durationMinutes: z.number().int().min(1).max(60).optional().describe('How long to hold the claim (default 5 min)'),
+          purpose: z.string().optional().describe('What you plan to build'),
+        }),
+        execute: async ({ bbox, durationMinutes, purpose }) => {
+          const ttlMs = (durationMinutes ?? 5) * 60 * 1000;
+          const success = this.coordinator!.regionManager.claim(this.agentId, bbox, ttlMs, purpose);
+          return { success, bbox, expiresInMinutes: durationMinutes ?? 5 };
+        },
+      }),
+
+      releaseRegion: tool({
+        description: 'Release your claimed region so other agents can use it.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          this.coordinator!.regionManager.release(this.agentId);
+          return { released: true };
+        },
+      }),
+
+      extendClaim: tool({
+        description: 'Extend your region claim if you need more time.',
+        inputSchema: z.object({
+          additionalMinutes: z.number().int().min(1).max(30),
+        }),
+        execute: async ({ additionalMinutes }) => {
+          const success = this.coordinator!.regionManager.extendClaim(this.agentId, additionalMinutes * 60 * 1000);
+          return { success };
+        },
+      }),
+
+      listAgents: tool({
+        description: 'List all other agents in the world. See their names, roles, and what they are doing.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          const agents = this.coordinator!.getAgentsSummary();
+          return agents.filter(a => a.agentId !== this.agentId).map(a => ({
+            agentId: a.agentId,
+            name: a.name,
+            role: a.role,
+            connected: a.connected,
+            supervisorRunning: a.supervisorRunning,
+          }));
+        },
+      }),
+
+      getClaimedRegions: tool({
+        description: 'See all claimed regions in the world. Useful for finding where other agents are building.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          const claims = this.coordinator!.regionManager.getAllClaims();
+          return claims.map(c => ({
+            agentId: c.agentId,
+            bbox: c.bbox,
+            purpose: c.purpose,
+            expiresIn: Math.max(0, Math.round((c.expiresAt - Date.now()) / 1000)),
+          }));
+        },
+      }),
+    } : {};
+
     return {
       ...coreTools,
       ...aestheticTools,
@@ -654,15 +796,26 @@ export class Supervisor {
       ...templateTools,
       ...memoryTools,
       ...controlTools,
+      ...multiAgentTools,
     };
   }
 
   private async runEpisodeOnce(): Promise<void> {
+    // Build multi-agent context if in multi-agent mode
+    const multiAgentContext = this.coordinator && this.personality ? {
+      agentId: this.agentId,
+      personality: this.personality,
+      otherAgents: this.coordinator.getAgentsSummary()
+        .filter(a => a.agentId !== this.agentId)
+        .map(a => ({ agentId: a.agentId, name: a.name, role: a.role })),
+    } : undefined;
+
     // Build dynamic prompt pack — lean context, everything else is pull-based via tools
     const promptPack = buildPromptPack({
       mode: this.mode,
       botRunner: this.botRunner,
       nextObjective: this.nextObjective,
+      multiAgent: multiAgentContext,
     });
 
     const episode = this.botRunner.startEpisode(this.nextObjective ?? `${this.mode} episode`);
@@ -671,11 +824,16 @@ export class Supervisor {
     const tools = this.buildTools();
 
     type ToolName = keyof typeof tools;
+    // Multi-agent communication tools - available in all modes
+    const multiAgentToolNames: ToolName[] = this.coordinator
+      ? ['sendMessage', 'broadcastMessage', 'getMessages', 'listAgents', 'claimRegion', 'releaseRegion', 'extendClaim', 'getClaimedRegions']
+      : [];
+
     const modeActiveTools: Record<SupervisorMode, ToolName[]> = {
-      explore: ['status', 'localSiteSummary', 'inspectRegion', 'getWorldSummary', 'findStructuresNear', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done'],
-      build: ['status', 'createBlueprint', 'buildFromBlueprint', 'compileBlueprint', 'executeScript', 'jobStatus', 'verifyStructure', 'addStructure', 'getStylePacks', 'getStylePack', 'ensureLoaded', 'renderAngles', 'walkTo', 'lookAt', 'teleport', 'localSiteSummary', 'checkZoning', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done'],
-      refine: ['status', 'critiqueStructure', 'beautyLoop', 'renderAngles', 'getStylePacks', 'getStylePack', 'listStructures', 'findStructuresNear', 'walkTo', 'lookAt', 'searchBlocks', 'execCommand', 'execCommandBatch', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done'],
-      plan: ['status', 'createCityPlan', 'getActiveCityPlan', 'findAvailablePlot', 'generateBuildingForPlot', 'buildRoads', 'checkZoning', 'getWorldSummary', 'listStructures', 'getStylePacks', 'localSiteSummary', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done'],
+      explore: ['status', 'localSiteSummary', 'inspectRegion', 'getWorldSummary', 'findStructuresNear', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      build: ['status', 'createBlueprint', 'buildFromBlueprint', 'compileBlueprint', 'executeScript', 'jobStatus', 'verifyStructure', 'addStructure', 'getStylePacks', 'getStylePack', 'ensureLoaded', 'renderAngles', 'walkTo', 'lookAt', 'teleport', 'localSiteSummary', 'checkZoning', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'removeLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      refine: ['status', 'critiqueStructure', 'beautyLoop', 'renderAngles', 'getStylePacks', 'getStylePack', 'listStructures', 'findStructuresNear', 'walkTo', 'lookAt', 'searchBlocks', 'execCommand', 'execCommandBatch', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
+      plan: ['status', 'createCityPlan', 'getActiveCityPlan', 'findAvailablePlot', 'generateBuildingForPlot', 'buildRoads', 'checkZoning', 'getWorldSummary', 'listStructures', 'getStylePacks', 'localSiteSummary', 'walkTo', 'lookAt', 'teleport', 'ensureLoaded', 'searchBlocks', 'getBlockCategories', 'execCommand', 'execCommandBatch', 'generateHouse', 'generateTower', 'scanTemplate', 'cloneTemplate', 'listTemplates', 'readMemory', 'addLearning', 'setPreference', 'writeNote', 'readEpisodeHistory', 'logNote', 'done', ...multiAgentToolNames],
     };
 
     let stepIdx = 0;
@@ -711,15 +869,34 @@ export class Supervisor {
             };
           }
 
+          // Check if it's time to remind the agent to check messages (multi-agent mode only)
+          const timeSinceLastCheck = Date.now() - this.lastMessageCheckTime;
+          const shouldRemind = this.coordinator &&
+            timeSinceLastCheck > MESSAGE_CHECK_INTERVAL_MS &&
+            !this.messageCheckReminded;
+
+          let updatedMessages = messages;
+
+          // Inject a reminder to check messages if needed
+          if (shouldRemind) {
+            this.messageCheckReminded = true;
+            const reminderContent = `[COORDINATION REMINDER] You haven't checked messages from other agents in ${Math.round(timeSinceLastCheck / 1000)} seconds. Good teamwork requires regular communication - please call getMessages() to see if other agents need your input or have updates for you. You can prioritize responses based on urgency, but acknowledging messages keeps the team coordinated.`;
+
+            updatedMessages = [
+              ...messages,
+              { role: 'user' as const, content: reminderContent },
+            ];
+          }
+
           // Anthropic cache control: mark the last message with cache breakpoint
           // so the entire conversation prefix is cached (tools + system + prior messages)
-          if (useAnthropic && messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
+          if (useAnthropic && updatedMessages.length > 0) {
+            const lastMsg = updatedMessages[updatedMessages.length - 1];
             if (lastMsg) {
               return {
                 activeTools: modeActiveTools[this.mode],
-                messages: messages.map((msg, i) =>
-                  i === messages.length - 1
+                messages: updatedMessages.map((msg, i) =>
+                  i === updatedMessages.length - 1
                     ? { ...msg, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } }
                     : msg,
                 ),
@@ -729,6 +906,7 @@ export class Supervisor {
 
           return {
             activeTools: modeActiveTools[this.mode],
+            messages: updatedMessages,
           };
         },
         onStepFinish: step => {

@@ -1,0 +1,135 @@
+# Spigot Configuration for Bot-Friendly Server
+# ==============================================
+# This configuration relaxes various protections to allow mineflayer bots
+# to operate without getting kicked.
+#
+# Copy this file to your Minecraft server root directory.
+#
+# WARNING: These settings reduce protections. Only use on servers
+# where you trust all connected clients.
+
+config-version: 12
+
+settings:
+  # Disable bungeecord (unless you're using it)
+  bungeecord: false
+
+  # Increase timeout for slow connections/operations
+  timeout-time: 120
+
+  # Log more information for debugging
+  log-villager-deaths: true
+  log-named-deaths: true
+
+  # Player movement settings - relaxed for bots
+  moved-wrongly-threshold: 100.0
+  moved-too-quickly-multiplier: 100.0
+
+  # Attribute limits - allow bots to move fast
+  attribute:
+    maxHealth:
+      max: 2048.0
+    movementSpeed:
+      max: 2048.0
+    attackDamage:
+      max: 2048.0
+
+  # Networking
+  netty-threads: 4
+
+  # User cache - important for offline mode
+  user-cache-size: 1000
+
+  # Whitelist - note: this is different from server.properties whitelist
+  # This affects who can connect while server is starting
+  restart-on-crash: true
+
+commands:
+  # Allow tab completion for bots
+  tab-complete: 0
+
+  # Spam exclusions - these commands won't count toward spam
+  spam-exclusions:
+    - /tp
+    - /teleport
+    - /fill
+    - /setblock
+    - /clone
+    - /summon
+    - /give
+    - /effect
+    - /gamemode
+    - /time
+    - /weather
+    - /gamerule
+    - /forceload
+
+  # Don't replace commands - let Paper/Bukkit handle them
+  replace-commands: []
+
+  # Silent command blocks (reduces spam in console)
+  silent-commandblock-console: true
+
+# World settings
+world-settings:
+  default:
+    # Entity tracking - affects how often position updates are sent
+    # Higher values = less frequent updates = less packets
+    entity-tracking-range:
+      players: 128
+      animals: 96
+      monsters: 96
+      misc: 64
+      other: 64
+
+    # Mob spawn limits - reduce for better performance
+    mob-spawn-range: 8
+
+    # Hopper settings
+    hopper-amount: 1
+    hopper-check: 1
+
+    # Growth rates (1 = normal, higher = faster)
+    growth:
+      cactus-modifier: 100
+      cane-modifier: 100
+      melon-modifier: 100
+      mushroom-modifier: 100
+      pumpkin-modifier: 100
+      sapling-modifier: 100
+      beetroot-modifier: 100
+      carrot-modifier: 100
+      potato-modifier: 100
+      wheat-modifier: 100
+      netherwart-modifier: 100
+      vine-modifier: 100
+      cocoa-modifier: 100
+      bamboo-modifier: 100
+      sweetberry-modifier: 100
+      kelp-modifier: 100
+      twistingvines-modifier: 100
+      weepingvines-modifier: 100
+      cavevines-modifier: 100
+      glowberry-modifier: 100
+
+    # Entity activation range - entities further away tick less often
+    # Helps with performance
+    entity-activation-range:
+      animals: 32
+      monsters: 32
+      raiders: 64
+      misc: 16
+      water: 16
+      villagers: 32
+      flying-monsters: 32
+
+    # Tick inactive villagers (needed for trading)
+    tick-inactive-villagers: true
+
+    # Nerf spawner mobs
+    nerf-spawner-mobs: false
+
+    # Merge radius for items/exp orbs
+    merge-radius:
+      item: 2.5
+      exp: 3.0

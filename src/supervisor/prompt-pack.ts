@@ -1,9 +1,16 @@
 import { BotRunner } from '../bot-runner.js';
 import { SupervisorMode } from './supervisor.js';
+import { AgentPersonality } from '../types/agent-config.js';
 
 export type PromptPack = {
   system: string;
   userMessage: string;
+};
+
+export type MultiAgentContext = {
+  agentId: string;
+  personality: AgentPersonality;
+  otherAgents: Array<{ agentId: string; name: string; role: string }>;
 };
 
 const MODE_INSTRUCTIONS: Record<SupervisorMode, string> = {
@@ -107,19 +114,50 @@ export function buildPromptPack(opts: {
   mode: SupervisorMode;
   botRunner: BotRunner;
   nextObjective: string | null;
+  multiAgent?: MultiAgentContext;
 }): PromptPack {
-  const { mode, botRunner, nextObjective } = opts;
+  const { mode, botRunner, nextObjective, multiAgent } = opts;
   const status = botRunner.getStatus();
 
   // --- System prompt: static identity + mode + rules ---
-  const systemParts: string[] = [
-    'You are a master Minecraft architect. You build cities that feel alive — every building furnished, every street landscaped, every district with its own character.',
-    'You work autonomously in episodes. Each episode you pick what the world needs most and build it. You have full creative control.',
-    '',
+  const systemParts: string[] = [];
+
+  // Personality-aware identity for multi-agent mode
+  if (multiAgent) {
+    systemParts.push(
+      `You are ${multiAgent.personality.name}, a Minecraft bot with the role of ${multiAgent.personality.role}.`,
+      `Your traits: ${multiAgent.personality.traits.join(', ')}`,
+      '',
+      multiAgent.personality.systemPromptAddition,
+      '',
+    );
+  } else {
+    systemParts.push(
+      'You are a master Minecraft architect. You build cities that feel alive — every building furnished, every street landscaped, every district with its own character.',
+      'You work autonomously in episodes. Each episode you pick what the world needs most and build it. You have full creative control.',
+      '',
+    );
+  }
+
+  systemParts.push(
     MODE_INSTRUCTIONS[mode],
     '',
     BASE_RULES,
-  ];
+  );
+
+  // Add multi-agent coordination rules if applicable
+  if (multiAgent) {
+    systemParts.push('');
+    systemParts.push(`MULTI-AGENT COORDINATION:
+You are one of multiple agents working together in this world. Coordinate with others:
+- Use listAgents to see other agents and their roles
+- Use sendMessage to communicate with specific agents
+- Use broadcastMessage for announcements to all agents
+- ALWAYS claimRegion before building to avoid conflicts with other agents
+- Use getClaimedRegions to see where others are working
+- Use getMessages periodically to check for incoming messages
+- Coordinate tasks based on roles: Explorers find spots, Builders construct, Decorators finish`);
+  }
 
   // --- User message: minimal dynamic context ---
   // Everything else is pull-based via tools (readMemory, readEpisodeHistory, getWorldSummary, etc.)
@@ -143,17 +181,36 @@ export function buildPromptPack(opts: {
     contextParts.push(`## Your Memory\n${memorySummary}`);
   }
 
-  // 4. Hint about available context tools
-  contextParts.push(`## Context (pull via tools)
-Call these as needed — don't waste tokens reading everything every episode:
-- readMemory: your full persistent memory (learnings, preferences, notes)
-- readEpisodeHistory: what you did in past episodes
-- getWorldSummary: nearby structures, districts
-- getActiveCityPlan: current city plan progress
-- getStylePacks / getStylePack: available building styles
-- listTemplates: saved reusable structures
-- listStructures: query the world index
-- searchBlocks: find any of ~789 Minecraft blocks`);
+  // 4. Multi-agent context
+  if (multiAgent && multiAgent.otherAgents.length > 0) {
+    const agentList = multiAgent.otherAgents
+      .map(a => `- ${a.name} (${a.agentId}): ${a.role}`)
+      .join('\n');
+    contextParts.push(`## Other Agents in World\n${agentList}\nUse sendMessage to coordinate. Check getMessages for incoming.`);
+  }
+
+  // 5. Hint about available context tools
+  const toolHints = [
+    '- readMemory: your full persistent memory (learnings, preferences, notes)',
+    '- readEpisodeHistory: what you did in past episodes',
+    '- getWorldSummary: nearby structures, districts',
+    '- getActiveCityPlan: current city plan progress',
+    '- getStylePacks / getStylePack: available building styles',
+    '- listTemplates: saved reusable structures',
+    '- listStructures: query the world index',
+    '- searchBlocks: find any of ~789 Minecraft blocks',
+  ];
+
+  if (multiAgent) {
+    toolHints.push(
+      '- listAgents: see other agents and their roles',
+      '- getMessages: check messages from other agents',
+      '- claimRegion: reserve an area before building',
+      '- getClaimedRegions: see where others are working',
+    );
+  }
+
+  contextParts.push(`## Context (pull via tools)\nCall these as needed:\n${toolHints.join('\n')}`);
 
   return {
     system: systemParts.join('\n'),

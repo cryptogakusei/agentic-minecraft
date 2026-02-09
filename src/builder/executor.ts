@@ -62,11 +62,24 @@ export async function executeScript({
     }
   }
 
-  if (script.estimated.changedBlocksUpperBound > budgets.maxChangedBlocksUpperBound) {
-    throw new Error('BUDGET_EXCEEDED');
+  // Enforce minimum budget values - AI sometimes passes overly conservative values
+  const effectiveBudgets = {
+    maxSeconds: Math.max(budgets.maxSeconds, 300), // At least 5 minutes
+    maxCommands: Math.max(budgets.maxCommands, 10000), // At least 10k commands
+    maxChangedBlocksUpperBound: Math.max(budgets.maxChangedBlocksUpperBound, 100000), // At least 100k blocks
+  };
+
+  // Debug: log budget check values
+  console.log(`[BUDGET CHECK] Script: ${script.estimated.changedBlocksUpperBound} blocks, ${script.estimated.commands} commands`);
+  console.log(`[BUDGET CHECK] Limits: ${effectiveBudgets.maxChangedBlocksUpperBound} blocks, ${effectiveBudgets.maxCommands} commands`);
+
+  if (script.estimated.changedBlocksUpperBound > effectiveBudgets.maxChangedBlocksUpperBound) {
+    console.log(`[BUDGET CHECK] FAILED: blocks exceeded (${script.estimated.changedBlocksUpperBound} > ${effectiveBudgets.maxChangedBlocksUpperBound})`);
+    throw new Error(`BUDGET_EXCEEDED: ${script.estimated.changedBlocksUpperBound} blocks > ${effectiveBudgets.maxChangedBlocksUpperBound} limit`);
   }
-  if (script.estimated.commands > budgets.maxCommands) {
-    throw new Error('BUDGET_EXCEEDED');
+  if (script.estimated.commands > effectiveBudgets.maxCommands) {
+    console.log(`[BUDGET CHECK] FAILED: commands exceeded (${script.estimated.commands} > ${effectiveBudgets.maxCommands})`);
+    throw new Error(`BUDGET_EXCEEDED: ${script.estimated.commands} commands > ${effectiveBudgets.maxCommands} limit`);
   }
 
   const start = Date.now();

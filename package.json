@@ -9,9 +9,11 @@
   },
   "scripts": {
     "dev": "tsx watch --env-file=.env src/main.ts",
+    "dev:multi": "tsx watch --env-file=.env src/main-multi.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file=.env dist/main.js",
+    "start:multi": "node --env-file=.env dist/main-multi.js",
     "reset": "rm -rf .data && echo 'Data reset.'"
   },
   "dependencies": {

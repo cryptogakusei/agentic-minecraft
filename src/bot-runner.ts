@@ -42,23 +42,34 @@ export class BotRunner {
   private readonly cityPlanStore: JsonStore<{ plan: CityPlan | null }>;
   private readonly templateStore: TemplateStore;
   private readonly agentMemory: AgentMemory;
+  readonly agentId: string;
 
   constructor(
     private readonly config: AppConfig,
     private readonly events: EventBus<AppEvents>,
     private readonly agent: AgentRuntime,
+    agentId?: string,  // Optional for backwards compatibility
   ) {
-    this.control = new ControlState(join(dirname(config.EVENTS_JSONL_PATH), 'control.json'));
-    this.blueprints = new BlueprintStore(join(dirname(config.EVENTS_JSONL_PATH), 'blueprints.json'));
-    this.scripts = new ScriptStore(join(dirname(config.EVENTS_JSONL_PATH), 'scripts.json'));
-    this.jobs = new JobStore(join(dirname(config.EVENTS_JSONL_PATH), 'jobs.json'));
+    this.agentId = agentId ?? 'default';
+    const dataDir = dirname(config.EVENTS_JSONL_PATH);
+
+    // Per-agent stores (memory, episodes, jobs)
+    const agentDataDir = agentId ? join(dataDir, 'agents', agentId) : dataDir;
+
+    this.control = new ControlState(join(agentDataDir, 'control.json'));
+    this.jobs = new JobStore(join(agentDataDir, 'jobs.json'));
     this.jobQueue = new JobQueue();
-    this.episodes = new EpisodeStore(join(dirname(config.EVENTS_JSONL_PATH), 'episodes.json'));
-    this.worldIndex = new WorldIndex(join(dirname(config.EVENTS_JSONL_PATH), 'world-index.json'));
-    this.cityPlanStore = new JsonStore(join(dirname(config.EVENTS_JSONL_PATH), 'city-plan.json'), { plan: null });
-    this.templateStore = new TemplateStore(join(dirname(config.EVENTS_JSONL_PATH), 'templates.json'));
-    this.agentMemory = new AgentMemory(join(dirname(config.EVENTS_JSONL_PATH), 'agent-memory.json'));
-    this.assetsDir = config.ASSETS_DIR;
+    this.episodes = new EpisodeStore(join(agentDataDir, 'episodes.json'));
+    this.agentMemory = new AgentMemory(join(agentDataDir, 'agent-memory.json'));
+
+    // Shared stores (blueprints, world index, templates, city plan)
+    this.blueprints = new BlueprintStore(join(dataDir, 'blueprints.json'));
+    this.scripts = new ScriptStore(join(dataDir, 'scripts.json'));
+    this.worldIndex = new WorldIndex(join(dataDir, 'world-index.json'));
+    this.cityPlanStore = new JsonStore(join(dataDir, 'city-plan.json'), { plan: null });
+    this.templateStore = new TemplateStore(join(dataDir, 'templates.json'));
+
+    this.assetsDir = agentId ? join(config.ASSETS_DIR, agentId) : config.ASSETS_DIR;
   }
 
   async init(): Promise<void> {

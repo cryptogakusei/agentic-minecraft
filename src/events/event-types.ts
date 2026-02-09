@@ -19,15 +19,17 @@ export type BotStateSnapshot = {
   height?: number;
 };
 
+import { BBox } from '../types/geometry.js';
+
 export type AppEvents =
   | EventEnvelope<'app.start', { pid: number }>
   | EventEnvelope<'app.error', { message: string; stack?: string }>
-  | EventEnvelope<'bot.connect', { host: string; port: number; username: string }>
-  | EventEnvelope<'bot.login', { username: string; version: string }>
-  | EventEnvelope<'bot.spawn', { position: { x: number; y: number; z: number } }>
-  | EventEnvelope<'bot.end', { reason: string }>
-  | EventEnvelope<'bot.kicked', { reason: unknown; loggedIn: boolean }>
-  | EventEnvelope<'bot.error', { message: string; stack?: string }>
+  | EventEnvelope<'bot.connect', { host: string; port: number; username: string; agentId?: string }>
+  | EventEnvelope<'bot.login', { username: string; version: string; agentId?: string }>
+  | EventEnvelope<'bot.spawn', { position: { x: number; y: number; z: number }; agentId?: string }>
+  | EventEnvelope<'bot.end', { reason: string; agentId?: string }>
+  | EventEnvelope<'bot.kicked', { reason: unknown; loggedIn: boolean; agentId?: string }>
+  | EventEnvelope<'bot.error', { message: string; stack?: string; agentId?: string }>
   | EventEnvelope<'viewer.start', { port: number; firstPerson: boolean }>
   | EventEnvelope<'supervisor.start', { autostart: boolean }>
   | EventEnvelope<'supervisor.stop', { reason: string }>
@@ -46,5 +48,12 @@ export type AppEvents =
   | EventEnvelope<'episode.finish', { episodeId: string; status: string; summary: string }>
   | EventEnvelope<'city.plan.created', { name: string; plotCount: number; roadCount: number }>
   | EventEnvelope<'structure.registered', { structureId: string; type: string; name: string }>
-  | EventEnvelope<'log.note', { text: string; tags?: string[] }>;
+  | EventEnvelope<'log.note', { text: string; tags?: string[] }>
+  // Multi-agent coordination events
+  | EventEnvelope<'agent.message', { from: string; to: string; content: string; ts: string }>
+  | EventEnvelope<'agent.broadcast', { from: string; content: string; ts: string }>
+  | EventEnvelope<'region.claimed', { agentId: string; bbox: BBox; ttlMs: number }>
+  | EventEnvelope<'region.released', { agentId: string }>
+  | EventEnvelope<'agent.created', { agentId: string; personality: string }>
+  | EventEnvelope<'agent.destroyed', { agentId: string; reason: string }>;
 
