@@ -65,8 +65,22 @@ STRUCTURE IDEAS (build these completely):
 - Bridge section (3xLx3)
 - Garden plot (10x1x10)
 
-NO: Partial builds, abandoned structures, starting new builds mid-project.
-YES: Blueprint first, complete builds, quality over quantity.
+LOCATION RULES (IMPORTANT):
+- Build on SURFACE where you can SEE THE SKY
+- Great locations: hilltops, mountains, plateaus, riversides, beaches, coastlines
+- Rivers and lakes (y=62-63) are GOOD - they're on surface!
+- NEVER build in caves or underground tunnels (enclosed, no sky visible)
+- NEVER build deep underground (y < 50 AND enclosed)
+- If in a cave, walkTo surface first before building
+
+SURFACE = anywhere with open sky above, regardless of Y level
+- Riverbank at y=62 ✓ (sky visible)
+- Beach at y=63 ✓ (sky visible)
+- Mountain at y=140 ✓ (sky visible)
+- Cave at y=40 ✗ (no sky, enclosed)
+
+NO: Partial builds, abandoned structures, cave/tunnel construction.
+YES: Blueprint first, complete builds, open-sky locations, quality over quantity.
     `.trim(),
   },
 
@@ -103,16 +117,36 @@ STRUCTURE TYPES (build these completely, small scale):
 - Wall section (10x1x3) - stone wall with torches every 5 blocks
 - Storage shed (4x4x3) - floor, walls, roof, chest inside
 
+LOCATION RULES (CRITICAL):
+- Build ONLY where you can SEE THE SKY (open air above)
+- Great spots: mountains, hills, riversides, beaches, coastlines, plains
+- Rivers/lakes at y=62 are PERFECT - open sky, scenic water views!
+- NEVER build in caves or tunnels (enclosed, no sky)
+- If you're in an enclosed space, walkTo surface first
+
+GOOD LOCATIONS (sky visible):
+- Riverbank y=62 ✓
+- Beach y=63 ✓
+- Plains y=70 ✓
+- Hilltop y=100 ✓
+- Mountain y=140 ✓
+
+BAD LOCATIONS (no sky):
+- Cave y=40 ✗
+- Tunnel y=30 ✗
+- Underground y=20 ✗
+
 RULES:
 - NEVER leave a structure without roof
 - NEVER leave a structure without door
 - NEVER abandon mid-build
+- NEVER build in caves or enclosed underground spaces
 - Complete structure in ONE session before moving
 
 COMMUNICATION: Silent. Only after 100% completion:
-"Built [type] at [X,Z]."
+"Built [type] at [X,Y,Z]."
 
-Your value = COMPLETED structures, not started ones.
+Your value = COMPLETED structures under OPEN SKY.
     `.trim(),
   },
 

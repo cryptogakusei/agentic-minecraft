@@ -254,6 +254,31 @@
   - Ran `pm2 startup` with systemd
   - All 6 agents will auto-restart on EC2 reboot
 
+### 2026-02-09 (Surface Building Rules)
+
+- **Updated Builder Location Rules**
+  - Changed from "y > 62" to "can see sky" rule
+  - Surface = anywhere with open sky above, regardless of Y level
+  - Valid locations: mountains, hills, riversides, beaches, coastlines, plains
+  - Invalid locations: caves, tunnels, underground enclosed spaces
+
+- **Valid Build Locations**
+  | Location | Y-Level | Status |
+  |----------|---------|--------|
+  | Mountain peak | y=140 | ✅ Sky visible |
+  | Hilltop | y=100 | ✅ Sky visible |
+  | Plains | y=70 | ✅ Sky visible |
+  | Riverbank | y=62 | ✅ Sky visible |
+  | Beach | y=63 | ✅ Sky visible |
+  | Cave | y=40 | ❌ Enclosed |
+  | Tunnel | y=30 | ❌ Enclosed |
+
+- **Builder Behavior Now**
+  - Builders will build riverside cottages, beach houses, harbors
+  - Must have open sky above build location
+  - If in cave/enclosed space, walkTo surface first
+  - Complete structures with: floor, walls, roof, door, interior
+
 ---
 
 ## Architecture Reference
