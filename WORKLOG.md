@@ -4,8 +4,9 @@
 - **Architecture**: Two-EC2 deployment (Minecraft + Agents separated)
 - **Minecraft Server**: AWS EC2 #1 (18.217.111.253:25565)
 - **Agent Server**: AWS EC2 #2 (18.222.122.59:8080)
-- **Agents**: Builder Bob, Explorer Emma (+ Builder Max available)
-- **Process Manager**: pm2 with auto-restart on boot
+- **Active Agents**: Builder Bob, Explorer Emma, Builder Max (3 agents)
+- **Process Manager**: pm2 with tsx (auto-restart on boot)
+- **Agent Philosophy**: 95% building, 5% communication (aggressive build mode)
 
 ---
 
@@ -181,6 +182,35 @@
   - VIEWER_VIEW_DISTANCE_CHUNKS=4 (reduced for stability)
   - VIEWER_FIRST_PERSON=true (fixes camera issues)
 
+### 2026-02-09 (Aggressive Build Mode)
+
+- **Fixed EC2 Security Groups**
+  - Added port 8080 to EC2 #2 security group (external API access)
+  - Added port 25565 from EC2 #2 private IP to EC2 #1 security group
+  - Private IP communication now working: 172.31.20.245 → 172.31.30.41
+
+- **Activated Builder Max (3 Agents Running)**
+  - Synced latest code from local to AWS
+  - Switched pm2 from compiled dist to tsx direct execution
+  - All 3 agents now active: Builder Bob, Explorer Emma, Builder Max
+
+- **Aggressive Building Personalities (95/5 Rule)**
+  - Changed all agent ratios from 70-80% build to **95% build / 5% talk**
+  - Builder Bob: "Relentless building machine" - no planning, just build
+  - Builder Max: "Silent building machine" - almost never communicates
+  - Explorer Emma: "Fast silent scout" - 90% explore, 10% report
+  - New philosophy: Blocks placed > words spoken
+  - Agents now ignore messages, make autonomous decisions, never ask questions
+
+- **Updated Documentation**
+  - Rewrote `docs/AGENTS.md` with new aggressive personalities
+  - Design philosophy: BUILD > TALK, Maximum Autonomy, Silent by Default
+
+- **pm2 Configuration**
+  - Changed from `node dist/main-multi.js` to `npx tsx src/main-multi.ts`
+  - Bypasses TypeScript compilation issues
+  - Saved config for auto-restart on boot
+
 ---
 
 ## Architecture Reference
@@ -195,7 +225,7 @@
 │   ─────────────────────                 ─────────────────               │
 │                                                                         │
 │   Docker: itzg/minecraft-server         pm2: minecraft-agents           │
-│   └── Paper 1.21.4                      └── node dist/main-multi.js    │
+│   └── Paper 1.21.4                      └── tsx src/main-multi.ts      │
 │       └── Port 25565                        │                           │
 │                                             ├── AgentCoordinator        │
 │             ▲                               │    ├── RegionManager      │
@@ -207,7 +237,8 @@
 │             └─────────────────────────────► ├── Explorer Emma :3002     │
 │               TCP/25565                     │    └── Supervisor (Claude)│
 │                                             │                           │
-│                                             ├── (Builder Max :3003)     │
+│                                             ├── Builder Max :3003       │
+│                                             │    └── Supervisor (Claude)│
 │                                             │                           │
 │                                             └── REST API :8080          │
 │                                                  ├── /v1/agents/*       │
