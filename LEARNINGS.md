@@ -231,108 +231,6 @@ WarriorStone issued server command: /tp @s BuilderBot  ← Rotating!
 
 ---
 
-## Learning #4: Async Callback Crashes - Bot Disconnects Mid-Operation
-
-**Date:** 2026-02-09
-
-### Symptom
-- `uncaughtException: TypeError: Cannot read properties of undefined (reading 'position')`
-- Crashes occur randomly, especially during pathfinding
-- Error points to timeout/interval callbacks in `agent-runtime.ts`
-
-### Root Cause
-
-Async operations (pathfinding, chunk loading) use callbacks that fire after delays:
-
-```typescript
-// Pathfinding with 20-second timeout
-const timeout = setTimeout(() => {
-  pf.stop();
-  const p = bot.entity.position;  // 💥 CRASH if bot disconnected!
-  resolve({ arrived: false, position: { x: p.x, y: p.y, z: p.z } });
-}, 20000);
-```
-
-**The problem:**
-1. Bot starts pathfinding → timeout scheduled for 20 seconds
-2. Bot gets kicked/disconnected at 15 seconds
-3. `bot.entity` becomes `undefined`
-4. Timeout fires at 20 seconds → accesses `bot.entity.position` → CRASH
-
-This affects:
-- `setTimeout` callbacks
-- `setInterval` callbacks
-- Promise `.then()` / `.catch()` handlers
-- Any async code that accesses bot state after a delay
-
-### Why This Is Hard to Detect
-
-1. **Timing-dependent** - Only crashes if disconnect happens during async operation
-2. **No compile-time warning** - `bot.entity` is typed as always present
-3. **Works 99% of the time** - Bot is usually connected when callbacks fire
-4. **Different code paths** - Multiple places access `bot.entity.position`
-
-### Fix Applied
-
-**Option A: Safe accessor with optional chaining (Recommended)**
-```typescript
-// Helper function for safe position access
-const safeGetPosition = () => {
-  if (bot.entity?.position) {
-    const p = bot.entity.position;
-    return { x: p.x, y: p.y, z: p.z };
-  }
-  // Fallback to goal position if bot disconnected
-  return { x: position.x, y: position.y, z: position.z };
-};
-
-// Use in all callbacks
-const timeout = setTimeout(() => {
-  try { pf.stop(); } catch { /* bot may be disconnected */ }
-  resolve({ arrived: false, position: safeGetPosition() });
-}, 20000);
-```
-
-**Option B: Early bailout in loops**
-```typescript
-// Check bot connection at start of each iteration
-for (const key of needed) {
-  if (!bot.entity) break;  // Bot disconnected, stop gracefully
-  // ... rest of loop
-}
-```
-
-**Option C: Wrap callbacks in try-catch**
-```typescript
-const timeout = setTimeout(() => {
-  try {
-    pf.stop();
-    const p = bot.entity.position;
-    resolve({ arrived: false, position: { x: p.x, y: p.y, z: p.z } });
-  } catch {
-    resolve({ arrived: false, position: { x: 0, y: 0, z: 0 } });
-  }
-}, 20000);
-```
-
-### Key Takeaway
-
-> **Any async callback that accesses mutable state must handle that state being gone.**
-> In bot systems, "connected" is not a permanent condition. Timeouts, intervals, and promises
-> can all fire after the bot disconnects. Use optional chaining (`?.`) and provide fallbacks.
-
-### Broader Pattern
-
-This applies to any long-lived async operation:
-- Database connections that close
-- WebSocket connections that drop
-- File handles that get released
-- User sessions that expire
-
-**Rule:** If `await` or `setTimeout` separates variable access from variable check, re-check before access.
-
----
-
 ## Future Learnings
 
 *Add new learnings as they're discovered...*
@@ -348,7 +246,6 @@ This applies to any long-lived async operation:
 | Static Guards | Protectors guard wrong locations | Death logs | Dynamic targeting |
 | Spam Kicks | Commands filtered as spam | Server logs | Rate limiting |
 | Echo Chamber | Agents reinforce false beliefs | Cross-check with world state | Ground truth validation |
-| Async Crashes | Callbacks access disconnected bot | Exception logs | Optional chaining + fallbacks |
 
 ---
 
